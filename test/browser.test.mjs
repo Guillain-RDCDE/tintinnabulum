@@ -304,6 +304,26 @@ await page.evaluate(() => window.son.unlock());
 ok('audio unlocks again after the reload',
    (await page.evaluate(() => window.son.engine.ctx.state)) === 'running');
 
+// --- changing instruments must not create a silent window ----------------
+// Regression: swapping the kit before loading it left every note dropped for
+// as long as the download took, which on a phone is seconds.
+const swap = await page.evaluate(async () => {
+  const son = window.son;
+  await son.setKit('synth');
+  const before = son.audio.stats.played;
+  const pending = son.setKit('hatnote'); // deliberately not awaited
+  for (let i = 0; i < 12; i++) son.emit({ magnitude: 500 * (i + 1), id: 'swap-' + i });
+  await new Promise((r) => setTimeout(r, 200));
+  const during = son.audio.stats.played - before;
+  await pending;
+  const mid = son.audio.stats.played;
+  for (let i = 0; i < 12; i++) son.emit({ magnitude: 700 * (i + 1), id: 'swapped-' + i });
+  await new Promise((r) => setTimeout(r, 200));
+  return { during, after: son.audio.stats.played - mid };
+});
+ok('notes keep sounding while a new kit is loading', swap.during > 0, 'played=' + swap.during);
+ok('notes still sound once the new kit is in', swap.after > 0, 'played=' + swap.after);
+
 // --- the way out of the sandbox -----------------------------------------
 // Without this a shared link is a dead end: no way to reach the project.
 const homeHref = await page.getAttribute('#home', 'href');
@@ -531,7 +551,16 @@ ok('phone: the start button is a comfortable tap target',
    tapTarget && tapTarget.height >= 44, tapTarget ? `${Math.round(tapTarget.height)}px tall` : 'missing');
 
 await mp.tap('#start');
-await mp.waitForTimeout(2500);
+// Wait for the audio state to settle rather than for a fixed number of
+// seconds: over a real connection the sample banks take as long as they take,
+// and a hard-coded sleep only tests the network.
+await mp
+  .waitForFunction(
+    () => /sound on|blocked|no instrument/i.test(document.querySelector('#audio-status').textContent),
+    null,
+    { timeout: 40000 }
+  )
+  .catch(() => {});
 const mobileAudio = await mp.evaluate(() => ({
   state: window.son.engine.ctx.state,
   status: window.son.audioStatus,

@@ -118,9 +118,18 @@ export class Sonifier {
     return this.engine.locked;
   }
 
+  /**
+   * Change instruments at runtime. Nothing is swapped until the incoming kit
+   * can actually play, so the change is inaudible rather than a gap.
+   */
   async setKit(kit) {
-    this.audio.setKit(typeof kit === 'string' ? (kit === 'synth' ? synthKit() : hatnoteKit()) : kit);
-    if (!this.engine.locked) await this.audio.load();
+    const built =
+      typeof kit === 'string' ? (kit === 'synth' ? synthKit() : hatnoteKit()) : kit;
+    if (this.engine.locked) {
+      this.audio.setKit(built); // nothing can sound yet anyway
+      return this;
+    }
+    await this.audio.loadKit(built);
     return this;
   }
 

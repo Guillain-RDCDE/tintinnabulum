@@ -101,11 +101,42 @@ const unlockEl = $('#unlock');
 function refreshUnlock() {
   unlockEl.classList.toggle('show', son.locked);
 }
+
+// Downloading fifty-seven samples over a phone connection takes seconds, and
+// during those seconds the feed is already drawing circles. Rather than leave
+// that window silent, start on synthesis -- which needs no network at all --
+// and move to the recorded bells once they have arrived.
+let sampleState = 'pending'; // pending | upgrading | done | chosen
+async function upgradeToSamples() {
+  if (sampleState !== 'pending' || $('#kit').value !== 'hatnote') return;
+  sampleState = 'upgrading';
+  try {
+    await son.setKit('hatnote');
+    const st = son.audio.status;
+    if (!st || !st.usable) throw new Error('sample kit unusable');
+    sampleState = 'done';
+    setAudioStatus(
+      st.problems && st.problems.length
+        ? 'Sound on. Some samples were unavailable and are covered by their neighbours.'
+        : 'Sound on.',
+      'good'
+    );
+  } catch (e) {
+    await son.setKit('synth');
+    sampleState = 'done';
+    setAudioStatus('Sound on, using synthesis: the recorded bells could not be downloaded.', 'good');
+  }
+}
+
 async function ensureAudio() {
   setAudioStatus('Preparing sound…');
+  if (sampleState === 'pending' && $('#kit').value === 'hatnote') {
+    await son.setKit('synth'); // instant, so the first event is never silent
+  }
   const status = await son.unlock();
   describe(status);
   refreshUnlock();
+  if (status.audible) upgradeToSamples(); // deliberately not awaited
   return status;
 }
 unlockEl.addEventListener('click', ensureAudio);
@@ -276,7 +307,9 @@ $('#invert').onchange = (e) => (son.mapper.invert = e.target.checked);
 $('#volume').oninput = (e) => (son.volume = Number(e.target.value) / 100);
 $('#voices').oninput = (e) => (son.pool.maxVoices = Math.max(1, Number(e.target.value) || 16));
 $('#kit').onchange = async (e) => {
+  sampleState = 'chosen'; // an explicit choice must not be overridden later
   await son.setKit(e.target.value);
+  describe({ ...son.audio.status, running: !son.locked, audible: !son.locked });
 };
 
 $('#record').onclick = async (ev) => {

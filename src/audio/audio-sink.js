@@ -19,6 +19,45 @@ export class AudioSink {
     return this;
   }
 
+  /**
+   * Loads a kit and only then makes it the active one.
+   *
+   * Assigning first leaves a window -- seconds, on a phone -- in which the new
+   * instruments have no buffers yet, so every note is silently dropped. The
+   * outgoing kit keeps playing until the new one can actually sound, and an
+   * unusable kit is not swapped in at all.
+   */
+  async loadKit(kit) {
+    const ctx = this.engine.ctx;
+    const list = [...new Set(Object.values(kit).filter(Boolean))];
+    const problems = [];
+    await Promise.all(
+      list.map(async (i) => {
+        try {
+          await i.load(ctx);
+        } catch (e) {
+          problems.push(`${i.name}: ${e.message}`);
+        }
+        if (i.failures && i.failures.length) {
+          problems.push(`${i.name}: ${i.failures.length} sample(s) unavailable`);
+        }
+      })
+    );
+    const playable = list.filter((i) => i.ready !== false);
+    const status = {
+      ok: playable.length === list.length && problems.length === 0,
+      usable: playable.length > 0,
+      instruments: list.length,
+      playable: playable.length,
+      problems,
+    };
+    if (status.usable) {
+      this.kit = kit;
+      this.status = status;
+    }
+    return status;
+  }
+
   /** Every distinct instrument currently reachable. */
   instruments() {
     const seen = new Set();
