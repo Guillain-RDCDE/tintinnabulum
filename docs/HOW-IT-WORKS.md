@@ -168,6 +168,21 @@ That is the entire interface. The bundled ones:
 | `ingestSource({url})` | SSE from the bundled server | See [the ingest server](#11-the-ingest-server). |
 | `manualSource()` / `son.emit()` | none | Call it yourself. |
 | `randomSource({rate})` | none | Synthetic traffic for tuning offline. |
+| `bitcoin()` | WebSocket to `ws.blockchain.info` | Unconfirmed transactions; magnitude is the total output in satoshis. |
+| `coinbase({product})` | WebSocket to `ws-feed.exchange.coinbase.com` | Executed trades; magnitude is size times price, and the exchange's own buy/sell side becomes the polarity. |
+| `earthquakes()` | Polled GeoJSON from the USGS | Magnitude is the seismic magnitude, unchanged. |
+| `bluesky()` | WebSocket to Jetstream | Posts as written; magnitude is the character count. |
+| `github()` | Polled `api.github.com/events` | Weighted by event type, with a push weighted by its commit count. |
+
+None of these needs a key. WebSocket feeds are not subject to CORS at all; the
+two polled ones were checked to send `Access-Control-Allow-Origin: *`, which is
+what lets the whole thing run from a static page with no server of its own.
+
+Two deliberate restraints. Bluesky labels carry the **length** of a post rather
+than its text: an unfiltered public firehose is not something to render on
+someone else's screen unasked, and the full record remains in `event.data` for
+anyone who decides otherwise. GitHub is polled once a minute because
+unauthenticated access is capped at sixty requests an hour.
 
 **What Wikipedia actually sends.** The EventStreams adapter reads a
 `recentchange` message and keeps this much:

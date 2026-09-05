@@ -375,6 +375,85 @@ ok('both views share one starfield control',
    await page.isChecked('#starfield-simple'));
 await page.uncheck('#starfield');
 
+// --- feed and language pickers ------------------------------------------
+// The pickers are exercised, not the remote feeds: asserting on live Bitcoin
+// or GitHub traffic would make this suite fail for reasons that have nothing
+// to do with the code.
+await page.click('#to-simple');
+
+const feedCount = await page.locator('#feeds-simple .feed').count();
+ok('several live feeds are offered', feedCount >= 6, feedCount + ' feeds');
+
+await page.click('#feeds-simple .feed[data-feed="earthquakes"]');
+ok('choosing a feed renames the start button',
+   /earthquakes/i.test(await page.textContent('#start')),
+   await page.textContent('#start'));
+ok('choosing a feed explains what it is',
+   (await page.textContent('#feed-note')).length > 40);
+ok('the advanced selector follows the simple picker',
+   (await page.inputValue('#source')) === 'earthquakes');
+ok('editions are hidden for a feed that has none',
+   await page.locator('#langs-wrap').isHidden());
+
+await page.click('#feeds-simple .feed[data-feed="eventstreams"]');
+ok('editions come back for Wikipedia', await page.locator('#langs-wrap').isVisible());
+
+const langCount = await page.locator('#langs-grid .lang').count();
+ok('every Wikipedia edition has a button', langCount >= 40, langCount + ' editions');
+ok('English is selected by default',
+   (await page.getAttribute('#langs-grid .lang[data-lang="en"]', 'aria-pressed')) === 'true');
+
+const flagInfo = await page.evaluate(() => {
+  const btns = [...document.querySelectorAll('#langs-grid .lang')];
+  return {
+    withFlag: btns.filter((b) => /\p{Regional_Indicator}/u.test(b.querySelector('.fl').textContent)).length,
+    fallback: btns.filter((b) => !/\p{Regional_Indicator}/u.test(b.querySelector('.fl').textContent)).length,
+    named: btns.every((b) => b.querySelector('.nm').textContent.trim().length > 0),
+    titled: btns.every((b) => (b.getAttribute('title') || '').includes('—')),
+  };
+});
+ok('most editions show a flag', flagInfo.withFlag >= 25, flagInfo.withFlag + ' flagged');
+ok('the rest fall back to a code rather than a wrong flag', flagInfo.fallback > 0,
+   flagInfo.fallback + ' without');
+ok('every edition is labelled in its own language', flagInfo.named);
+ok('hovering names the language in full', flagInfo.titled);
+
+await page.click('#langs-grid .lang[data-lang="fr"]');
+ok('adding an edition updates the raw field',
+   (await page.inputValue('#langs')).split(',').includes('fr'),
+   await page.inputValue('#langs'));
+await page.click('#langs-grid .lang[data-lang="fr"]');
+await page.click('#langs-grid .lang[data-lang="en"]');
+ok('deselecting everything falls back to English rather than nothing',
+   (await page.inputValue('#langs')) === 'en', await page.inputValue('#langs'));
+
+// The new source factories must at least build, start and stop cleanly.
+const factories = await page.evaluate(async () => {
+  const m = await import('../src/index.js');
+  const out = {};
+  for (const [key, make] of Object.entries({
+    bitcoin: () => m.bitcoin(),
+    coinbase: () => m.coinbase(),
+    earthquakes: () => m.earthquakes(),
+    bluesky: () => m.bluesky(),
+    github: () => m.github(),
+  })) {
+    try {
+      const s = make();
+      out[key] = { name: s.name, hasStart: typeof s.start === 'function', hasStop: typeof s.stop === 'function' };
+      s.stop();
+    } catch (e) {
+      out[key] = { error: e.message };
+    }
+  }
+  return out;
+});
+ok('every new source builds and exposes the source interface',
+   Object.values(factories).every((f) => f.hasStart && f.hasStop),
+   JSON.stringify(factories));
+
+await page.click('#to-advanced');
+
 // --- recorder -----------------------------------------------------------
 const rec = await page.evaluate(async () => {
   const { Recorder } = await import('../src/audio/recorder-sink.js');

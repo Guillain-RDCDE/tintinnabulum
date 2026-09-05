@@ -72,6 +72,28 @@
   .shp[aria-pressed="true"] { border-color: var(--accent); }
   .shp[aria-pressed="true"] small { color: var(--accent); font-weight: 600; }
 
+  /* ---- feed and language pickers ---- */
+  .feed-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: .5em; margin-top: .5em; }
+  .feed { border: 1px solid var(--line); border-radius: 8px; background: #fff; cursor: pointer;
+          padding: .6em .7em; text-align: left; font: inherit; color: var(--fg); min-height: 46px;
+          transition: border-color .12s ease, transform .12s ease; }
+  .feed:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .feed[aria-pressed="true"] { border-color: var(--accent); border-width: 2px; padding: calc(.6em - 1px) calc(.7em - 1px); }
+  .feed b { display: block; font-size: .92rem; font-weight: 600; }
+  .feed span { display: block; font-size: .74rem; color: var(--muted); margin-top: .1em; }
+  .feed[aria-pressed="true"] b { color: var(--accent); }
+
+  .lang-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: .45em; margin-top: .5em; }
+  .lang { border: 1px solid var(--line); border-radius: 7px; background: #fff; cursor: pointer;
+          padding: .4em .2em; font: inherit; color: var(--fg); min-height: 52px; text-align: center;
+          transition: border-color .12s ease, transform .12s ease; }
+  .lang:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .lang .fl { display: block; font-size: 1.15rem; line-height: 1.2; }
+  .lang .nm { display: block; font-size: .68rem; color: var(--muted); margin-top: .1em;
+              white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lang[aria-pressed="true"] { border-color: var(--accent); border-width: 2px; padding: calc(.4em - 1px) calc(.2em - 1px); }
+  .lang[aria-pressed="true"] .nm { color: var(--accent); font-weight: 600; }
+
   .check { display: flex; align-items: center; gap: .5em; margin-top: .9em; font-size: .9rem; }
   .check input { width: 18px; height: 18px; }
 
@@ -125,13 +147,22 @@
 
   <!-- ================= simple ================= -->
   <div id="simple">
-    <button id="start" class="primary" type="button" data-on="false">Start listening to Wikipedia</button>
+    <button id="start" class="primary" type="button" data-on="false">Start listening</button>
     <span id="audio-status"></span>
 
-    <ul class="explain">
-      <li>A <strong>bell</strong> means text was added; a <strong>plucked string</strong> means text was removed.</li>
-      <li>A <strong>low note</strong> is a large edit, a <strong>high note</strong> a small one.</li>
-      <li>Each circle is one edit. Tap a circle to open the article.</li>
+    <p class="section-label">What to listen to</p>
+    <div class="feed-grid" id="feeds-simple"></div>
+    <p class="explain" id="feed-note"></p>
+
+    <div id="langs-wrap">
+      <p class="section-label">Wikipedia editions</p>
+      <div class="lang-grid" id="langs-grid"></div>
+    </div>
+
+    <ul class="explain" id="legend">
+      <li>A <strong>bell</strong> means something grew; a <strong>plucked string</strong> means it shrank.</li>
+      <li>A <strong>low note</strong> is a large event, a <strong>high note</strong> a small one.</li>
+      <li>Each mark is one event. Tap it to open the thing that made the sound.</li>
     </ul>
 
     <p class="section-label">Colours</p>
@@ -155,11 +186,16 @@
           <select id="source">
             <option value="eventstreams">Wikipedia — EventStreams (HTTPS)</option>
             <option value="wikimon">Wikipedia — wikimon (Hatnote)</option>
+            <option value="bitcoin">Bitcoin — unconfirmed transactions</option>
+            <option value="coinbase">Coinbase — BTC-USD trades</option>
+            <option value="earthquakes">Earthquakes — USGS</option>
+            <option value="bluesky">Bluesky — post firehose</option>
+            <option value="github">GitHub — public events</option>
             <option value="ingest">Ingest server (/events)</option>
             <option value="random">Synthetic traffic</option>
           </select>
         </label>
-        <label>Languages <input type="text" id="langs" value="en" placeholder="en,fr,de"></label>
+        <label>Wikipedia editions <input type="text" id="langs" value="en" placeholder="en,fr,de"></label>
         <label id="ingest-row" hidden>Ingest stream URL
           <input type="text" id="ingest-url" value="/events" placeholder="http://localhost:8080/events">
         </label>

@@ -41,6 +41,12 @@ export {
   randomSource,
   ingestSource,
   wikipedia,
+  bitcoin,
+  coinbase,
+  earthquakes,
+  bluesky,
+  github,
   WIKIPEDIA_LANGS,
+  WIKIPEDIA_LANGUAGES,
   WIKIMON_PORTS,
 } from './sources/index.js';

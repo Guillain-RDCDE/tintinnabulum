@@ -53,7 +53,8 @@ in plain language first and in full detail afterwards.
 |---|---|
 | **Instruments → Synthesis** | The same events played by a synthesiser rather than recorded bells. No audio files are involved. |
 | **Mapping → Scale → pentatonic** | Notes snap to a five-note scale, and the result sounds composed rather than arbitrary. |
-| **Languages → `en,fr,de,ja`** | Four Wikipedias at once: busier, denser, more musical. |
+| **Bitcoin, Coinbase, Earthquakes, Bluesky, GitHub** | Five other live feeds, in the same one-tap list as Wikipedia. Coinbase is the interesting one: buys ring and sells pluck. |
+| **Wikipedia editions** | Pick several at once from the flag grid — four Wikipedias running together are busier, denser and more musical than one. |
 | **Palette** | Nine looks, from *Nocturne* to *Bronze* to *Daylight*. Circles already on screen recolour immediately, and the choice is remembered. |
 | **Instruments → Record** | Captures what you are hearing to an audio file. |
 | **Untick "Big event = low note"** | Inverts the mapping. Large edits become shrill — worse, but instructive. |
@@ -121,6 +122,24 @@ dropped in arrival order, so a burst of small events never masks the one large
 event inside it. `maxPerSecond` adds a token-bucket ceiling on top.
 
 ### Sources
+
+Six live feeds are built in, all public, all keyless, all reachable over TLS
+from a static page:
+
+| Feed | What you hear | Rate |
+|---|---|---|
+| `wikipedia({langs})` | Edits across 42 Wikipedia editions, pitched by bytes changed | busy |
+| `bitcoin()` | Unconfirmed transactions, pitched by value. **The feed the idea began with:** Listen to Wikipedia was built after BitListen, which sonified exactly this | steady |
+| `coinbase({product})` | Trades as they execute — **buys ring, sells pluck**, the one feed that supplies a meaningful polarity of its own | busy |
+| `earthquakes()` | USGS seismic events. The only feed where *magnitude* is already the field's own word | a handful an hour |
+| `bluesky()` | The public post firehose, pitched by post length | very busy |
+| `github()` | Pushes, pull requests, releases and stars across GitHub | polled once a minute |
+
+Bluesky labels carry the size of a post rather than its text: an unfiltered
+firehose is not something to put on someone's screen unasked. The full record
+stays in `event.data`.
+
+And the generic adapters:
 
 | Factory | Use |
 |---|---|

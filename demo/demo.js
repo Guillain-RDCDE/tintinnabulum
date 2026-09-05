@@ -10,8 +10,14 @@ import {
   DEFAULT_SHAPE,
   drawShape,
   wikipedia,
+  bitcoin,
+  coinbase,
+  earthquakes,
+  bluesky,
+  github,
   ingestSource,
   randomSource,
+  WIKIPEDIA_LANGUAGES,
 } from '../src/index.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -107,11 +113,135 @@ refreshUnlock();
 
 // --- the one button that matters -----------------------------------------
 
+// Every feed the sandbox can listen to. `langs` marks the ones that take a
+// Wikipedia edition list, which is the only feed-specific control there is.
+const FEEDS = {
+  eventstreams: {
+    label: 'Wikipedia',
+    blurb: 'Live edits, worldwide',
+    langs: true,
+    note: 'Every mark is somebody editing an article right now. A bell means text was added, a plucked string means it was removed.',
+    make: (langs) => wikipedia({ langs, backend: 'eventstreams', onStatus: setStatus }),
+  },
+  bitcoin: {
+    label: 'Bitcoin',
+    blurb: 'Unconfirmed transactions',
+    note: 'Each transaction as it enters the network, pitched by its value. This is the feed the whole idea began with: Listen to Wikipedia was built after BitListen, which sonified exactly this.',
+    make: () => bitcoin({ onStatus: setStatus }),
+  },
+  coinbase: {
+    label: 'Coinbase',
+    blurb: 'BTC-USD trades',
+    note: 'Trades as they execute. Buys ring, sells pluck: this is the one feed that hands over a direction meaning something on its own.',
+    make: () => coinbase({ onStatus: setStatus }),
+  },
+  earthquakes: {
+    label: 'Earthquakes',
+    blurb: 'USGS, past hour',
+    note: 'The only feed where magnitude is already the word the field uses. Quiet by nature: a handful an hour, so expect long silences.',
+    make: () => earthquakes(),
+  },
+  bluesky: {
+    label: 'Bluesky',
+    blurb: 'Public post firehose',
+    note: 'Posts as they are written, pitched by length. Labels carry the size rather than the text: an unfiltered firehose is not something to put on your screen unasked.',
+    make: () => bluesky({ onStatus: setStatus }),
+  },
+  github: {
+    label: 'GitHub',
+    blurb: 'Public events',
+    note: 'Pushes, pull requests, releases and stars across all of GitHub. Polled once a minute, which is what the unauthenticated rate limit allows.',
+    make: () => github(),
+  },
+  random: {
+    label: 'Synthetic',
+    blurb: 'Generated traffic',
+    note: 'Made-up events at a steady rate. Useful for hearing what a setting does without waiting for the world to produce something.',
+    make: () => randomSource({ rate: 5 }),
+  },
+};
+
+let feed = store.get('tintinnabulum:feed') in FEEDS ? store.get('tintinnabulum:feed') : 'eventstreams';
+let langs = (store.get('tintinnabulum:langs') || 'en').split(',').filter(Boolean);
+if (!langs.length) langs = ['en'];
+
 const startBtn = $('#start');
 
 function setRunning(on) {
   startBtn.dataset.on = String(on);
-  startBtn.textContent = on ? 'Stop' : 'Start listening to Wikipedia';
+  startBtn.textContent = on ? 'Stop' : `Start listening to ${FEEDS[feed].label}`;
+}
+
+function selectFeed(name, persist = true) {
+  if (!FEEDS[name]) return;
+  feed = name;
+  $('#feed-note').textContent = FEEDS[name].note;
+  $('#langs-wrap').hidden = !FEEDS[name].langs;
+  for (const b of $('#feeds-simple').children) {
+    b.setAttribute('aria-pressed', String(b.dataset.feed === name));
+  }
+  if ($('#source').value !== name && FEEDS[name]) $('#source').value = name;
+  if (persist) store.set('tintinnabulum:feed', name);
+  if (startBtn.dataset.on !== 'true') setRunning(false);
+}
+
+for (const [name, def] of Object.entries(FEEDS)) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'feed';
+  btn.dataset.feed = name;
+  btn.setAttribute('aria-pressed', 'false');
+  btn.innerHTML = `<b></b><span></span>`;
+  btn.querySelector('b').textContent = def.label;
+  btn.querySelector('span').textContent = def.blurb;
+  btn.addEventListener('click', () => {
+    selectFeed(name);
+    if (startBtn.dataset.on === 'true') startFeed(); // switch live
+  });
+  $('#feeds-simple').appendChild(btn);
+}
+
+// --- Wikipedia editions, as flags rather than two-letter codes ------------
+const langGrid = $('#langs-grid');
+function syncLangs(persist = true) {
+  for (const b of langGrid.children) {
+    b.setAttribute('aria-pressed', String(langs.includes(b.dataset.lang)));
+  }
+  $('#langs').value = langs.join(',');
+  if (persist) store.set('tintinnabulum:langs', langs.join(','));
+}
+
+for (const l of WIKIPEDIA_LANGUAGES) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'lang';
+  btn.dataset.lang = l.code;
+  btn.title = `${l.name} — ${l.native} (${l.code})`;
+  btn.setAttribute('aria-pressed', 'false');
+  const fl = document.createElement('span');
+  fl.className = 'fl';
+  fl.textContent = l.flag || l.code.toUpperCase();
+  const nm = document.createElement('span');
+  nm.className = 'nm';
+  nm.textContent = l.native;
+  btn.append(fl, nm);
+  btn.addEventListener('click', () => {
+    const i = langs.indexOf(l.code);
+    if (i >= 0) langs.splice(i, 1);
+    else langs.push(l.code);
+    if (!langs.length) langs = ['en']; // never leave nothing selected
+    syncLangs();
+    if (startBtn.dataset.on === 'true' && FEEDS[feed].langs) startFeed();
+  });
+  langGrid.appendChild(btn);
+}
+
+function startFeed() {
+  if (source) son.disconnect(source);
+  source = FEEDS[feed].make(langs);
+  setStatus('connecting', source.name);
+  son.connect(source);
+  setRunning(true);
 }
 
 startBtn.onclick = async () => {
@@ -123,12 +253,8 @@ startBtn.onclick = async () => {
     return;
   }
   await ensureAudio();
-  if (source) son.disconnect(source);
-  source = wikipedia({ langs: ['en'], backend: 'eventstreams', onStatus: setStatus });
-  son.connect(source);
-  setRunning(true);
+  startFeed();
 };
-setRunning(false);
 
 // --- controls (advanced) --------------------------------------------------
 
@@ -301,16 +427,22 @@ function setStatus(state, name) {
 }
 
 $('#source').addEventListener('change', () => {
-  $('#ingest-row').hidden = $('#source').value !== 'ingest';
+  const kind = $('#source').value;
+  $('#ingest-row').hidden = kind !== 'ingest';
+  $('#langs').closest('label').hidden = !(FEEDS[kind] && FEEDS[kind].langs) && kind !== 'wikimon';
+  if (FEEDS[kind]) selectFeed(kind);
+});
+
+// The advanced view keeps a raw comma-separated field: flags are friendlier,
+// but typing codes is faster once you know them. Both drive the same state.
+$('#langs').addEventListener('change', () => {
+  const parsed = $('#langs').value.split(/[\s,]+/).filter(Boolean);
+  langs = parsed.length ? parsed : ['en'];
+  syncLangs();
 });
 
 function buildSource() {
   const kind = $('#source').value;
-  const langs = $('#langs')
-    .value.split(/[\s,]+/)
-    .filter(Boolean);
-  if (kind === 'eventstreams')
-    return wikipedia({ langs, backend: 'eventstreams', onStatus: setStatus });
   if (kind === 'wikimon') return wikipedia({ langs, backend: 'wikimon', onStatus: setStatus });
   if (kind === 'ingest')
     return ingestSource({
@@ -318,6 +450,7 @@ function buildSource() {
       replay: 10,
       onStatus: setStatus,
     });
+  if (FEEDS[kind]) return FEEDS[kind].make(langs);
   return randomSource({ rate: 5 });
 }
 
@@ -329,6 +462,10 @@ $('#connect').onclick = async () => {
   son.connect(source);
   setRunning(true);
 };
+
+selectFeed(feed, false);
+syncLangs(false);
+setRunning(false);
 
 // --- log and stats --------------------------------------------------------
 
