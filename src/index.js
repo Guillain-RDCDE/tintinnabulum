@@ -17,6 +17,7 @@ export {
   KITS,
   KIT_NAMES,
   makeKit,
+  renderKitWaveform,
 } from './audio/instruments.js';
 
 export { CanvasSink, DEFAULT_PALETTE } from './visual/canvas-sink.js';

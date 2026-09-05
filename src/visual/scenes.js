@@ -340,7 +340,11 @@ export const SCENES = {
         // Radius from size, and angular speed falling with radius, so the
         // field separates into shells the way a real system would.
         const rad = 24 + (p.r / 90) * maxR;
-        const speed = 900 / (rad + 40);
+        // Angular speed falls with radius, as it would in a real system. The
+        // constant sets the pace: at 50 the innermost shell takes about eight
+        // seconds to come round and the outermost the better part of a minute.
+        // It was 900, which spun the inner orbits twice a second.
+        const speed = 50 / (rad + 40);
         const a = p.pick * TAU + (age / 1000) * speed;
         const x = cx + Math.cos(a) * rad;
         const y = cy + Math.sin(a) * rad * 0.62; // a shallow tilt reads as depth

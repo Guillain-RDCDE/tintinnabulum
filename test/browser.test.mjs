@@ -308,6 +308,44 @@ ok('every kit sounds in every role', silentRoles.length === 0, silentRoles.join(
 ok('there are several kits to choose from', Object.keys(kitPeaks).length >= 6,
    Object.keys(kitPeaks).join(', '));
 
+// Each kit card carries its own waveform, rendered from the instrument. A
+// blank one would be a card promising a sound it cannot show.
+await page.waitForFunction(
+  () => {
+    const cards = [...document.querySelectorAll('#kits .card canvas')];
+    return cards.length > 0 && cards.every((c) => c.width > 0);
+  },
+  null,
+  { timeout: 30000 }
+).catch(() => {});
+const waves = await page.evaluate(() =>
+  [...document.querySelectorAll('#kits .card')].map((b) => {
+    const cv = b.querySelector('canvas');
+    const r = cv.getBoundingClientRect();
+    // A canvas left at the HTML default of 300x150 was never painted at all,
+    // which is how twelve blank cards once passed a check for "some ink".
+    const sized = cv.width > 0 && Math.abs(cv.width / (window.devicePixelRatio || 1) - r.width) < 8;
+    const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
+    const bg = [d[0], d[1], d[2]];
+    let ink = 0;
+    let total = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      total++;
+      if (Math.abs(d[i] - bg[0]) + Math.abs(d[i + 1] - bg[1]) + Math.abs(d[i + 2] - bg[2]) > 20) ink++;
+    }
+    return { name: b.dataset.kit, sized, share: total ? ink / total : 0 };
+  })
+);
+const unsized = waves.filter((c) => !c.sized);
+ok('every kit canvas is painted at its displayed size', unsized.length === 0,
+   unsized.map((c) => c.name).join(' ') || waves.length + ' sized');
+// A waveform covers a real share of the panel. The centre line alone is under
+// two per cent, which is what the previous threshold accepted.
+const flatCards = waves.filter((c) => c.share < 0.06);
+ok('every kit card shows its own waveform, not just an axis', flatCards.length === 0,
+   flatCards.map((c) => `${c.name}(${(c.share * 100).toFixed(1)}%)`).join(' ') ||
+     'thinnest ' + (Math.min(...waves.map((c) => c.share)) * 100).toFixed(1) + '%');
+
 // The pitch-swept presets are the new mechanism, so they get their own check:
 // a sweep that fails leaves a flat tone, which still passes a peak test.
 const sweepWorks = await page.evaluate(async () => {

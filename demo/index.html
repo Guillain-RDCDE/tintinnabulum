@@ -107,6 +107,14 @@
   #scenes .card .cap { display: block; padding: .45rem .6rem .5rem; }
   #scenes .card b { font-size: .875rem; }
   #scenes .card span { font-size: .7rem; }
+
+  /* kit cards show the instrument's own waveform */
+  #kits { grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); }
+  #kits .card { padding: 0; overflow: hidden; min-height: 0; }
+  #kits .card canvas { display: block; width: 100%; height: 56px; background: #04141c; }
+  #kits .card .cap { display: block; padding: .45rem .6rem .5rem; }
+  #kits .card b { font-size: .875rem; }
+  #kits .card span { font-size: .7rem; }
   .card { border: 1px solid var(--line-strong); border-radius: var(--r-ctl); background: var(--surface);
     cursor: pointer; padding: .65rem .7rem; text-align: left; font: inherit; color: var(--fg);
     min-height: 52px; transition: border-color .15s ease, transform .1s ease; }

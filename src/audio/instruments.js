@@ -218,6 +218,41 @@ export const SYNTH_PRESETS = {
   harp: { engine: 'sub', wave: 'sawtooth', attack: 0.002, decay: 1.0, cutoff: 3200, cutoffDecay: 0.4, q: 2 },
   // Weight underneath everything else.
   bass: { engine: 'sub', wave: 'triangle', attack: 0.004, decay: 0.9, cutoff: 700, cutoffDecay: 0.3, q: 3 },
+
+  // --- the natural world ---
+  // Birdsong is mostly two things: a fast pitch bend and a fast wobble on top
+  // of it. `vibrato` supplies the wobble, `sweep` the bend.
+  chirp: {
+    engine: 'sub', wave: 'sine', attack: 0.004, decay: 0.16,
+    cutoff: 6000, cutoffDecay: 0.1, q: 1,
+    sweep: 0.62, sweepTime: 0.05, vibrato: { rate: 26, depth: 0.05 },
+    octave: 24, // birds sit far above the rest of the range
+  },
+  warble: {
+    engine: 'sub', wave: 'sine', attack: 0.006, decay: 0.34,
+    cutoff: 5200, cutoffDecay: 0.24, q: 1,
+    sweep: 1.35, sweepTime: 0.09, vibrato: { rate: 15, depth: 0.09 },
+    octave: 19,
+  },
+  // Low, breathy and slow: the counterweight to the small birds.
+  owl: {
+    engine: 'sub', wave: 'sine', attack: 0.05, decay: 0.55,
+    cutoff: 900, cutoffDecay: 0.4, q: 4,
+    sweep: 1.1, sweepTime: 0.18, vibrato: { rate: 5, depth: 0.02 },
+    octave: -12,
+  },
+  // A dry, buzzing tick, very high and very short.
+  cricket: {
+    engine: 'sub', wave: 'square', attack: 0.001, decay: 0.05,
+    cutoff: 9000, cutoffDecay: 0.03, q: 12,
+    vibrato: { rate: 70, depth: 0.06 },
+    octave: 31,
+  },
+  // Air rather than pitch: a wide, slow swell.
+  breeze: {
+    engine: 'sub', wave: 'sawtooth', attack: 0.5, decay: 2.6,
+    cutoff: 520, cutoffDecay: 2.0, q: 1, detune: 14, octave: -7,
+  },
 };
 
 export class SynthInstrument extends Instrument {
@@ -233,7 +268,9 @@ export class SynthInstrument extends Instrument {
   play(ctx, dest, { semitone = 0, velocity = 1, when = 0 } = {}) {
     const p = this.params;
     const t0 = when || ctx.currentTime;
-    const freq = this.baseFreq * Math.pow(2, semitone / 12);
+    // `octave` shifts a preset's whole register: birds belong far above the
+    // range the mapper works in, an owl far below it.
+    const freq = this.baseFreq * Math.pow(2, (semitone + (p.octave || 0)) / 12);
     const peak = Math.max(0.0002, velocity * this.gain);
     const decay = p.decay;
 
@@ -258,6 +295,19 @@ export class SynthInstrument extends Instrument {
       param.exponentialRampToValueAtTime(Math.max(1, target), t0 + (p.sweepTime || 0.05));
     };
 
+    // Vibrato: an LFO added onto the frequency in hertz. Depth is a fraction
+    // of the note, so the wobble stays proportional across the register.
+    const addVibrato = (param) => {
+      if (!p.vibrato) return;
+      const lfo = ctx.createOscillator();
+      lfo.type = 'sine';
+      lfo.frequency.value = p.vibrato.rate;
+      const depth = ctx.createGain();
+      depth.gain.value = freq * p.vibrato.depth;
+      lfo.connect(depth).connect(param);
+      nodes.push(lfo);
+    };
+
     if (p.engine === 'fm') {
       const car = ctx.createOscillator();
       car.type = p.wave;
@@ -272,10 +322,12 @@ export class SynthInstrument extends Instrument {
       mod.connect(modGain).connect(car.frequency);
       car.connect(amp);
       nodes.push(car, mod);
+      addVibrato(car.frequency);
     } else {
       const osc = ctx.createOscillator();
       osc.type = p.wave;
       bend(osc.frequency, freq);
+      addVibrato(osc.frequency);
       const filt = ctx.createBiquadFilter();
       filt.type = 'lowpass';
       filt.Q.value = p.q;
@@ -417,6 +469,16 @@ export const KITS = {
     note: 'Harp above, deep pizzicato below. The warmest of the set.',
     make: trio('harp', 'bass', 'pad'),
   },
+  birds: {
+    label: 'Dawn chorus',
+    note: 'Chirps and warbles high above the register, with an owl underneath. Busy feeds turn into a hedgerow.',
+    make: trio('chirp', 'warble', 'owl'),
+  },
+  night: {
+    label: 'Night',
+    note: 'Crickets ticking over a low owl, with the wind for the rare events. Sparse feeds suit it best.',
+    make: trio('cricket', 'owl', 'breeze'),
+  },
 };
 
 export const KIT_NAMES = Object.keys(KITS);
@@ -424,4 +486,94 @@ export const KIT_NAMES = Object.keys(KITS);
 /** Build a kit by name; unknown names fall back to synthesis. */
 export function makeKit(name) {
   return (KITS[name] || KITS.synth).make();
+}
+
+/**
+ * Draw a kit's own waveform onto a canvas context.
+ *
+ * The shape is rendered from the instrument itself rather than decorated by
+ * hand, so a card cannot promise a sound it does not make: the attack, the
+ * decay and the character of the timbre are all visible in the envelope. It
+ * needs a browser for OfflineAudioContext, and returns false where there is
+ * none rather than throwing.
+ */
+export async function renderKitWaveform(ctx, kitName, { w, h, palette, seconds = 2.4 } = {}) {
+  if (typeof OfflineAudioContext === 'undefined') return false;
+  const rate = 22050; // plenty for an envelope, and a quarter of the work
+  try {
+    const kit = makeKit(kitName);
+    const off = new OfflineAudioContext(1, Math.ceil(rate * seconds), rate);
+    // A sampled kit would otherwise decode fifty-seven files just to draw a
+    // thumbnail, which is slow enough to stall the page. Three notes from the
+    // same bank give the same envelope for a fiftieth of the work.
+    const parts = [kit.add, kit.sub, kit.add].filter(Boolean).map((inst) => {
+      if (!Array.isArray(inst.files) || inst.files.length <= 4) return inst;
+      const mid = Math.floor(inst.files.length / 2);
+      return new SampleInstrument({
+        name: inst.name,
+        baseUrl: inst.baseUrl,
+        exts: inst.exts,
+        step: inst.step,
+        gain: inst.gain,
+        baseSemitone: inst.baseSemitone,
+        files: [inst.files[1], inst.files[mid], inst.files[inst.files.length - 2]],
+      });
+    });
+    await Promise.all([...new Set(parts)].map((i) => (i.load ? i.load(off) : null)));
+    // Three strikes at different pitches: one note shows an envelope, several
+    // show how the instrument behaves across its range.
+    [[6, 0.05], [17, 0.75], [1, 1.45]].forEach(([semitone, at], k) => {
+      const inst = parts[k % parts.length];
+      if (inst) inst.play(off, off.destination, { semitone, velocity: 1, when: at });
+    });
+    const buf = await off.startRendering();
+    const d = buf.getChannelData(0);
+
+    ctx.fillStyle = palette.background;
+    ctx.fillRect(0, 0, w, h);
+
+    const mid = h / 2;
+    const per = Math.max(1, Math.floor(d.length / w));
+    let peak = 0;
+    for (let i = 0; i < d.length; i += 7) peak = Math.max(peak, Math.abs(d[i]));
+    if (peak <= 0) return false;
+    const scale = (h / 2 - 3) / peak;
+
+    ctx.beginPath();
+    ctx.moveTo(0, mid);
+    for (let x = 0; x < w; x++) {
+      let hi = 0;
+      const from = x * per;
+      for (let i = from; i < from + per && i < d.length; i++) {
+        const v = Math.abs(d[i]);
+        if (v > hi) hi = v;
+      }
+      ctx.lineTo(x, mid - hi * scale);
+    }
+    for (let x = w - 1; x >= 0; x--) {
+      let hi = 0;
+      const from = x * per;
+      for (let i = from; i < from + per && i < d.length; i++) {
+        const v = Math.abs(d[i]);
+        if (v > hi) hi = v;
+      }
+      ctx.lineTo(x, mid + hi * scale);
+    }
+    ctx.closePath();
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = palette.anon;
+    ctx.fill();
+
+    ctx.globalAlpha = 0.35;
+    ctx.strokeStyle = palette.default;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, mid + 0.5);
+    ctx.lineTo(w, mid + 0.5);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    return true;
+  } catch (e) {
+    return false;
+  }
 }

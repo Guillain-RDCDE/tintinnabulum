@@ -8,6 +8,7 @@ import {
   DEFAULT_PALETTE_NAME,
   swatchOf,
   KITS,
+  renderKitWaveform,
   SHAPES,
   DEFAULT_SHAPE,
   drawShape,
@@ -349,21 +350,54 @@ async function selectKit(name, { persist = true, audition = true } = {}) {
   }
 }
 
+// Each card carries the instrument's own waveform, rendered from the kit
+// itself, so it cannot show a shape the sound does not have.
+async function paintKitWave(cv, name) {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = cv.clientWidth || 148;
+  const h = 56;
+  cv.width = Math.round(w * dpr);
+  cv.height = Math.round(h * dpr);
+  const c = cv.getContext('2d');
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  await renderKitWaveform(c, name, { w, h, palette: PALETTES[canvas.paletteName].colors });
+}
+
 for (const [name, def] of Object.entries(KITS)) {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'card';
   btn.dataset.kit = name;
   btn.setAttribute('aria-pressed', 'false');
-  btn.innerHTML = '<b></b><span></span>';
-  btn.querySelector('b').textContent = def.label;
-  btn.querySelector('span').textContent = def.sampled ? 'Recorded samples' : 'Synthesised';
+  btn.title = def.note;
+  const cv = document.createElement('canvas');
+  const cap = document.createElement('span');
+  cap.className = 'cap';
+  cap.innerHTML = '<b></b><span></span>';
+  cap.querySelector('b').textContent = def.label;
+  cap.querySelector('span').textContent = def.sampled ? 'Recorded samples' : 'Synthesised';
+  btn.append(cv, cap);
   btn.addEventListener('click', async () => {
     await ensureAudio();
     selectKit(name);
   });
   $('#kits').appendChild(btn);
 }
+
+// Waveforms are rendered one after another rather than all at once: each is a
+// short offline render, and a dozen in parallel stalls the first paint.
+async function paintKitWaves() {
+  for (const b of $('#kits').children) {
+    // One kit failing must not cost the other eleven their thumbnails, which
+    // is exactly what a bare sequential await did.
+    try {
+      await paintKitWave(b.querySelector('canvas'), b.dataset.kit);
+    } catch (e) {
+      console.warn('waveform failed for ' + b.dataset.kit, e);
+    }
+  }
+}
+requestAnimationFrame(() => paintKitWaves());
 
 const scaleSel = $('#scale');
 for (const name of Object.keys(SCALES)) {
@@ -493,6 +527,7 @@ function selectPalette(name, persist = true) {
   // so they follow the choice rather than lying about it.
   if ($('#shapes').children.length) repaintShapeSwatches();
   if ($('#scenes').children.length) repaintScenePreviews();
+  if ($('#kits').children.length) paintKitWaves();
 }
 
 for (const [name, def] of Object.entries(PALETTES)) {
