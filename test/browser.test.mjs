@@ -204,6 +204,54 @@ const flood = await page.evaluate(async () => {
 ok('polyphony is limited under flood', flood.limited > 0, 'stolen+denied=' + flood.limited);
 ok('voice count stays bounded under flood', flood.active <= 16, 'active=' + flood.active);
 
+// --- palette picker -----------------------------------------------------
+const swatchCount = await page.locator('#palettes .pal').count();
+ok('every palette has a swatch in the picker', swatchCount >= 8, swatchCount + ' swatches');
+
+const groundOf = () =>
+  page.evaluate(() => {
+    const c = document.querySelector('#canvas');
+    const d = c.getContext('2d').getImageData(2, 2, 1, 1).data;
+    return [d[0], d[1], d[2]].join(',');
+  });
+
+const beforeGround = await groundOf();
+await page.click('#palettes .pal[data-palette="daylight"]');
+await page.waitForTimeout(120);
+const afterGround = await groundOf();
+ok('choosing a palette repaints the canvas ground', beforeGround !== afterGround,
+   `${beforeGround} -> ${afterGround}`);
+ok('daylight really is a light ground',
+   Number(afterGround.split(',')[0]) > 200, afterGround);
+
+const recoloured = await page.evaluate(() => {
+  const sink = window.son.sinks.find((s) => s.particles);
+  window.son.emit({ magnitude: 5000, id: 'palette-probe', category: 'anon' });
+  const born = sink.particles[sink.particles.length - 1].color;
+  sink.setPalette('ultraviolet');
+  const after = sink.particles[sink.particles.length - 1].color;
+  return { born, after, name: sink.paletteName };
+});
+ok('circles already on screen are recoloured by a palette change',
+   recoloured.born !== recoloured.after, `${recoloured.born} -> ${recoloured.after}`);
+ok('the sink reports the palette it is using', recoloured.name === 'ultraviolet', recoloured.name);
+
+// The choice must survive a reload, and must not break when storage is denied.
+await page.click('#palettes .pal[data-palette="bronze"]');
+await page.waitForTimeout(100);
+await page.reload({ waitUntil: 'networkidle' });
+await page.waitForFunction(() => window.son, null, { timeout: 15000 });
+const restored = await page.evaluate(
+  () => window.son.sinks.find((s) => s.particles).paletteName
+);
+ok('the palette choice survives a reload', restored === 'bronze', restored);
+
+// The reload left a fresh, suspended AudioContext. Without this the recorder
+// check below would capture silence and still pass on size alone.
+await page.evaluate(() => window.son.unlock());
+ok('audio unlocks again after the reload',
+   (await page.evaluate(() => window.son.engine.ctx.state)) === 'running');
+
 // --- recorder -----------------------------------------------------------
 const rec = await page.evaluate(async () => {
   const { Recorder } = await import('../src/audio/recorder-sink.js');
@@ -216,7 +264,10 @@ const rec = await page.evaluate(async () => {
   return { supported: true, size: blob.size, type: blob.type };
 });
 if (rec.supported) {
-  ok('recorder produced a non-empty file', rec.size > 0, `${rec.size} bytes ${rec.type}`);
+  // An empty Opus container is about 300 bytes, so "non-empty" is not enough:
+  // require a size that can only come from actually captured audio.
+  ok('recorder captured real audio, not an empty container',
+     rec.size > 2000, `${rec.size} bytes ${rec.type}`);
 } else {
   ok('recorder reports unsupported cleanly', true, 'MediaRecorder absent in this build');
 }

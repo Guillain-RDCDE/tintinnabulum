@@ -17,6 +17,13 @@ export {
 } from './audio/instruments.js';
 
 export { CanvasSink, DEFAULT_PALETTE } from './visual/canvas-sink.js';
+export {
+  PALETTES,
+  PALETTE_KEYS,
+  DEFAULT_PALETTE_NAME,
+  resolvePalette,
+  swatchOf,
+} from './visual/palettes.js';
 
 export {
   websocketSource,

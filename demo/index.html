@@ -37,6 +37,17 @@
   #log li { padding: .25em .6em; border-bottom: 1px solid #f0f3f5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .cat-bot { color: #9b59b6 } .cat-anon { color: #27ae60 } .cat-alert { color: #d35400 }
   .stat { font-variant-numeric: tabular-nums; color: #6b7a88; font-size: .85em; }
+
+  /* palette picker */
+  .palette-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(74px, 1fr)); gap: .5em; margin-top: .5em; }
+  .pal { border: 2px solid transparent; border-radius: 7px; padding: 0; background: none; cursor: pointer; transition: transform .12s ease, border-color .12s ease; }
+  .pal:hover { transform: translateY(-2px); border-color: #c9d3dc; }
+  .pal .chip { position: relative; display: flex; align-items: center; justify-content: center; gap: 4px; height: 40px; border-radius: 5px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.18); }
+  .pal .chip i { width: 9px; height: 9px; border-radius: 50%; }
+  .pal small { display: block; margin-top: .25em; font-size: .68rem; color: #6b7a88; text-align: center; letter-spacing: .01em; }
+  .pal[aria-pressed="true"] { border-color: var(--accent); }
+  .pal[aria-pressed="true"] small { color: var(--accent); font-weight: 600; }
+  .pal[aria-pressed="true"] .chip::after { content: "✓"; position: absolute; right: 4px; bottom: 1px; font-size: .7rem; color: #fff; text-shadow: 0 0 3px rgba(0,0,0,.9); }
   code { background: #eef1f4; padding: .1em .3em; border-radius: 3px; }
 </style>
 </head>
@@ -100,6 +111,12 @@
     <label>Scale <select id="scale"></select></label>
     <label>Range (semitones) <input type="number" id="range" min="6" max="60" value="27"></label>
     <label class="row" style="gap:.4em"><input type="checkbox" id="invert" checked> Big event = low note</label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Palette</legend>
+    <div class="palette-grid" id="palettes"></div>
+    <small id="palette-note" class="stat" style="display:block;margin-top:.6em;min-height:2.4em"></small>
   </fieldset>
 
   <fieldset>

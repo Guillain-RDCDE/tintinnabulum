@@ -47,6 +47,7 @@ data, see [Feed it your own data](#feed-it-your-own-data) below — it is one
 | **Instruments → Synthesis** | The same events played by a synthesiser instead of recorded bells. No audio files involved at all. |
 | **Mapping → Scale → pentatonic** | Notes snap to a five-note scale. Suddenly it sounds composed rather than random. |
 | **Languages → `en,fr,de,ja`** | Four Wikipedias at once. Busier, denser, more musical. |
+| **Palette → any swatch** | Nine looks, from *Nocturne* to *Bronze* to *Daylight*. The circles already on screen recolour instantly, and your choice is remembered. |
 | **Instruments → ● Record** | Records what you are hearing to an audio file you can keep. |
 | **Untick "Big event = low note"** | Inverts the whole thing. Big edits become shrill. Worse! But instructive. |
 
@@ -175,6 +176,32 @@ new instrument.
 `hatnoteKit()` and `synthKit()` return ready-made `{add, sub, accent}` sets and
 are interchangeable at runtime. The sample banks are resolved relative to the
 library itself, so the project runs from any mount point.
+
+### Palettes
+
+Nine, selectable at runtime and shipped as plain data in
+[`src/visual/palettes.js`](src/visual/palettes.js):
+
+| | | |
+|---|---|---|
+| **Nocturne** — slate blue, the original | **Bronze** — brass and copper | **Aurora** — mint and violet |
+| **Ember** — banked fire | **Ultraviolet** — magenta and cyan | **Blueprint** — technical, calmest |
+| **Sakura** — blossom on plum | **Daylight** — ink on paper, for projectors | **Monochrome** — lightness only |
+
+```js
+new CanvasSink('#canvas', { palette: 'bronze' });
+sink.setPalette('aurora');                    // circles already drawn recolour
+sink.setPalette({ anon: '#00ffcc' });         // or override individual roles
+```
+
+Adding one is adding an entry to that file. The test suite holds them to
+measured standards rather than taste: label text must clear WCAG AA (4.5:1)
+against its background, circles must stay visible at their 50 % fill opacity,
+and the categories must be perceptually distinct — **CIELAB ΔE ≥ 22**, not
+luminance contrast, because two colours can differ obviously to the eye while
+sharing a luminance band. *Monochrome* is the deliberate exception, held to a
+lightness floor instead, since it exists to be readable without colour vision at
+all.
 
 ### Tests
 

@@ -348,9 +348,26 @@ inside a bigger site, with no configuration.
 - **Lifecycle**: fade over 12 s; a shockwave ring expands from `r+20` to `r+40`
   over 2.2 s on an ease-out; the label shows for 3 s and on hover; oldest
   particles are culled past 800.
-- **Colour** by category — white for a logged-in user, green anonymous, purple
-  bot, orange alert.
+- **Colour** by category, from the active palette — in the default *Nocturne*:
+  white for a logged-in user, green anonymous, purple bot, orange alert. A
+  category nobody defined falls back to `default`, so custom data always gets a
+  visible colour instead of vanishing.
 - Clicking a circle hit-tests newest-first and opens its `url`.
+
+**Palettes.** Nine ship with the project and can be swapped at runtime with
+`setPalette()`; circles already on screen are recoloured from the category they
+were born with, so the change is immediate rather than waiting for the canvas to
+turn over.
+
+They are held to measured standards, not taste. Label text must clear WCAG AA
+(4.5:1) against its ground. Circles must stay visible against that ground at the
+0.5 fill opacity they are actually drawn with. And the categories must be
+distinguishable from **each other** — measured as perceptual distance in CIELAB
+(ΔE ≥ 22) rather than luminance contrast, because deep cyan and magenta are
+unmistakable to the eye while sharing almost the same luminance. Using contrast
+ratio there would reject good palettes and accept bad ones. *Monochrome* is the
+deliberate exception: being greyscale, it is held to a lightness floor instead,
+which is exactly the promise it makes.
 
 It is Canvas 2D rather than SVG because the original's one-DOM-node-plus-
 transition per circle does not survive a busy multi-language feed, and because

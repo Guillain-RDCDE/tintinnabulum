@@ -3,6 +3,13 @@
 import { normalize, unitPosition } from '../src/core/event.js';
 import { Mapper } from '../src/core/mapper.js';
 import { VoicePool } from '../src/core/voices.js';
+import {
+  PALETTES,
+  PALETTE_KEYS,
+  DEFAULT_PALETTE_NAME,
+  resolvePalette,
+  swatchOf,
+} from '../src/visual/palettes.js';
 
 let fails = 0;
 const ok = (name, cond, extra = '') => {
@@ -94,6 +101,131 @@ const rl = new VoicePool({ maxVoices: 100, maxPerSecond: 10 });
 let granted = 0;
 for (let i = 0; i < 50; i++) if (rl.request(0.5, 2000)) granted++;
 ok('token bucket caps a burst', granted <= 11, 'granted=' + granted);
+
+// --- palettes: complete, and actually legible ---------------------------
+// A palette can be pretty and still unusable. These checks measure it rather
+// than trusting the eye: WCAG relative luminance, with the circle colours
+// composited over their own background at the 0.5 fill opacity the canvas uses.
+
+const hex = (c) => {
+  const m = /^#([0-9a-f]{6})$/i.exec(c.trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+};
+const srgbToLin = (v) => {
+  const c = v / 255;
+  return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+};
+const lum = (rgb) => {
+  const [r, g, b] = rgb.map(srgbToLin);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+const contrast = (a, b) => {
+  const la = lum(a);
+  const lb = lum(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+};
+const over = (fg, bg, alpha) => fg.map((v, i) => v * alpha + bg[i] * (1 - alpha));
+
+// WCAG contrast is luminance only. That is the right measure for text on a
+// background, but the wrong one for "can you tell these two circles apart":
+// deep cyan and magenta are unmistakable yet share a luminance band. Category
+// separation is therefore measured as perceptual distance in CIELAB (CIE76).
+const toLab = (rgb) => {
+  const [r, g, b] = rgb.map(srgbToLin);
+  const f = (t) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
+  const X = f((0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047);
+  const Y = f(0.2126 * r + 0.7152 * g + 0.0722 * b);
+  const Z = f((0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883);
+  return [116 * Y - 16, 500 * (X - Y), 200 * (Y - Z)];
+};
+const deltaE = (a, b) => {
+  const la = toLab(a);
+  const lb = toLab(b);
+  return Math.hypot(la[0] - lb[0], la[1] - lb[1], la[2] - lb[2]);
+};
+
+const names = Object.keys(PALETTES);
+ok('palettes are defined', names.length >= 8, names.length + ' palettes');
+ok('the default palette exists', Boolean(PALETTES[DEFAULT_PALETTE_NAME]), DEFAULT_PALETTE_NAME);
+
+let structureOk = true;
+let parseOk = true;
+for (const n of names) {
+  const c = PALETTES[n].colors;
+  if (!PALETTE_KEYS.every((k) => typeof c[k] === 'string' && c[k])) {
+    structureOk = false;
+    console.log('   missing keys in ' + n);
+  }
+  for (const k of ['background', 'default', 'user', 'anon', 'bot', 'alert', 'text']) {
+    if (!hex(c[k])) {
+      parseOk = false;
+      console.log(`   ${n}.${k} is not a plain hex colour: ${c[k]}`);
+    }
+  }
+  if (!/^rgba?\(/.test(c.banner) || !/^rgba?\(/.test(c.hud)) {
+    parseOk = false;
+    console.log('   banner/hud must be rgba() in ' + n);
+  }
+  if (!PALETTES[n].label || !PALETTES[n].note) {
+    structureOk = false;
+    console.log('   missing label/note in ' + n);
+  }
+}
+ok('every palette defines every key', structureOk);
+ok('every colour parses', parseOk);
+
+let worstText = { ratio: Infinity, name: '' };
+let worstCircle = { ratio: Infinity, name: '' };
+let worstPair = { ratio: Infinity, name: '' };
+let worstMono = { ratio: Infinity, name: '' };
+for (const n of names) {
+  const c = PALETTES[n].colors;
+  const bg = hex(c.background);
+
+  const t = contrast(hex(c.text), bg);
+  if (t < worstText.ratio) worstText = { ratio: t, name: n };
+
+  const cats = ['user', 'anon', 'bot', 'alert'];
+  const composited = cats.map((k) => over(hex(c[k]), bg, 0.5));
+  for (const comp of composited) {
+    const r = contrast(comp, bg);
+    if (r < worstCircle.ratio) worstCircle = { ratio: r, name: n };
+  }
+  for (let i = 0; i < composited.length; i++) {
+    for (let j = i + 1; j < composited.length; j++) {
+      const pair = `${n} ${cats[i]}/${cats[j]}`;
+      if (n === 'monochrome') {
+        // Greyscale by design: perceptual distance cannot apply, so this one
+        // palette is held to a luminance floor -- which is exactly what it
+        // promises, that colour vision is never required.
+        const r = contrast(composited[i], composited[j]);
+        if (r < worstMono.ratio) worstMono = { ratio: r, name: pair };
+      } else {
+        const d = deltaE(composited[i], composited[j]);
+        if (d < worstPair.ratio) worstPair = { ratio: d, name: pair };
+      }
+    }
+  }
+}
+ok('label text is legible on every background (WCAG AA, 4.5)',
+   worstText.ratio >= 4.5, `worst ${worstText.name} = ${worstText.ratio.toFixed(2)}`);
+ok('circles stand out from their background at 50% fill',
+   worstCircle.ratio >= 1.4, `worst ${worstCircle.name} = ${worstCircle.ratio.toFixed(2)}`);
+ok('colour palettes keep their categories perceptually apart (CIELAB dE >= 22)',
+   worstPair.ratio >= 22, `closest ${worstPair.name} = dE ${worstPair.ratio.toFixed(1)}`);
+ok('monochrome separates categories by lightness alone (>= 1.35)',
+   worstMono.ratio >= 1.35, `closest ${worstMono.name} = ${worstMono.ratio.toFixed(3)}`);
+
+ok('resolvePalette fills gaps from the default',
+   resolvePalette({ anon: '#123456' }).background === PALETTES[DEFAULT_PALETTE_NAME].colors.background);
+ok('resolvePalette honours the override', resolvePalette({ anon: '#123456' }).anon === '#123456');
+ok('an unknown palette name falls back rather than throwing',
+   resolvePalette('does-not-exist').background === PALETTES[DEFAULT_PALETTE_NAME].colors.background);
+const sw = swatchOf('bronze');
+ok('swatchOf returns a ground and four dots',
+   Boolean(sw.background) && sw.dots.length === 4 && sw.dots.every(Boolean));
 
 console.log(fails ? `\n${fails} FAILURE(S)` : '\nall core checks passed');
 process.exit(fails ? 1 : 0);

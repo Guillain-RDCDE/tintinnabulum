@@ -3,6 +3,9 @@ import {
   CanvasSink,
   Recorder,
   SCALES,
+  PALETTES,
+  DEFAULT_PALETTE_NAME,
+  swatchOf,
   wikipedia,
   ingestSource,
   randomSource,
@@ -19,7 +22,22 @@ const son = new Sonifier({
   volume: 0.7,
 });
 
-const canvas = new CanvasSink('#canvas', { showHud: true });
+// Remembering the palette is a per-viewer convenience, so storage failing
+// (private window, blocked site data) must never break the page.
+const STORE_KEY = 'tintinnabulum:palette';
+const readStored = () => {
+  try {
+    const v = localStorage.getItem(STORE_KEY);
+    return v && PALETTES[v] ? v : null;
+  } catch {
+    return null;
+  }
+};
+
+const canvas = new CanvasSink('#canvas', {
+  showHud: true,
+  palette: readStored() || DEFAULT_PALETTE_NAME,
+});
 son.use(canvas);
 
 const recorder = new Recorder(son.engine);
@@ -46,6 +64,45 @@ for (const name of Object.keys(SCALES)) {
   scaleSel.appendChild(o);
 }
 scaleSel.value = 'chromatic';
+
+// --- palette picker -------------------------------------------------------
+// Swatches rather than a dropdown: the choice is visual, so the control is too.
+const paletteGrid = $('#palettes');
+const paletteNote = $('#palette-note');
+
+function selectPalette(name, persist = true) {
+  canvas.setPalette(name);
+  canvas.canvas.style.background = PALETTES[name].colors.background;
+  paletteNote.textContent = PALETTES[name].note;
+  for (const b of paletteGrid.children) {
+    b.setAttribute('aria-pressed', String(b.dataset.palette === name));
+  }
+  if (persist) {
+    try {
+      localStorage.setItem(STORE_KEY, name);
+    } catch {
+      /* storage unavailable; the palette still applies for this session */
+    }
+  }
+}
+
+for (const [name, def] of Object.entries(PALETTES)) {
+  const { background, dots } = swatchOf(name);
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'pal';
+  btn.dataset.palette = name;
+  btn.title = def.note;
+  btn.setAttribute('aria-pressed', 'false');
+  btn.innerHTML =
+    `<span class="chip" style="background:${background}">` +
+    dots.map((c) => `<i style="background:${c}"></i>`).join('') +
+    `</span><small>${def.label}</small>`;
+  btn.addEventListener('click', () => selectPalette(name));
+  paletteGrid.appendChild(btn);
+}
+
+selectPalette(canvas.paletteName, false);
 
 scaleSel.onchange = () => son.mapper.setScale(scaleSel.value);
 $('#mode').onchange = (e) => {

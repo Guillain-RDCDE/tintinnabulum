@@ -1,4 +1,5 @@
 import { unitPosition } from '../core/event.js';
+import { PALETTES, DEFAULT_PALETTE_NAME, resolvePalette } from './palettes.js';
 
 // Canvas 2D rewrite of the original D3 v3 visuals.
 //
@@ -7,24 +8,21 @@ import { unitPosition } from '../core/event.js';
 // either way. Canvas also survives the event rates SVG chokes on: one node per
 // circle plus a transition per circle is thousands of DOM mutations a minute.
 
-export const DEFAULT_PALETTE = {
-  background: '#1c2733',
-  default: '#ffffff',
-  user: '#ffffff',
-  anon: '#2ecc71',
-  bot: '#9b59b6',
-  alert: '#e67e22',
-  text: '#ffffff',
-  banner: 'rgba(41, 128, 185, 0.85)',
-  hud: 'rgba(41, 128, 185, 0.5)',
-};
+export { PALETTES, DEFAULT_PALETTE_NAME, resolvePalette } from './palettes.js';
+
+/** The default colours, kept as a named export for convenience. */
+export const DEFAULT_PALETTE = resolvePalette(DEFAULT_PALETTE_NAME);
 
 export class CanvasSink {
   constructor(canvas, opts = {}) {
     this.canvas = typeof canvas === 'string' ? document.querySelector(canvas) : canvas;
     if (!this.canvas) throw new Error('CanvasSink: canvas not found');
     this.ctx = this.canvas.getContext('2d');
-    this.palette = { ...DEFAULT_PALETTE, ...(opts.palette || {}) };
+    this.paletteName =
+      typeof opts.palette === 'string' && PALETTES[opts.palette]
+        ? opts.palette
+        : DEFAULT_PALETTE_NAME;
+    this.palette = resolvePalette(opts.palette || DEFAULT_PALETTE_NAME);
 
     this.life = opts.life ?? 12000; // ms a circle stays visible
     this.ringLife = opts.ringLife ?? 2200;
@@ -102,6 +100,23 @@ export class CanvasSink {
     return this.palette[ev.category] || this.palette.default;
   }
 
+  /**
+   * Switch palette at runtime. Circles already on screen are recoloured from
+   * the category they were born with, so a change takes effect immediately
+   * instead of waiting for the canvas to turn over.
+   */
+  setPalette(nameOrColors) {
+    this.palette = resolvePalette(nameOrColors);
+    this.paletteName =
+      typeof nameOrColors === 'string' && PALETTES[nameOrColors]
+        ? nameOrColors
+        : this.paletteName;
+    for (const p of this.particles) {
+      p.color = this.palette[p.category] || this.palette.default;
+    }
+    return this;
+  }
+
   handle(ev) {
     if (!ev.map) return;
     const now = performance.now();
@@ -117,6 +132,7 @@ export class CanvasSink {
       y: 0,
       born: now,
       life: this.life,
+      category: ev.category,
       color: this.colorFor(ev),
       alpha0: ev.dimmed ? this.dimOpacity : this.fillOpacity,
       label: ev.label || '',
