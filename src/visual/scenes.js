@@ -323,6 +323,318 @@ export const SCENES = {
       ctx.stroke();
     },
   },
+  orbits: {
+    label: 'Orbits',
+    positional: false,
+    note: 'Each event is captured into an orbit, small ones fast and close, large ones slow and wide.',
+    frame(ctx, api) {
+      const cx = api.w / 2;
+      const cy = api.h / 2;
+      const maxR = Math.min(api.w, api.h) * 0.46;
+      for (const p of api.particles) {
+        const age = api.now - p.born;
+        const fade = 1 - age / p.life;
+        // Radius from size, and angular speed falling with radius, so the
+        // field separates into shells the way a real system would.
+        const rad = 24 + (p.r / 90) * maxR;
+        const speed = 900 / (rad + 40);
+        const a = p.pick * TAU + (age / 1000) * speed;
+        const x = cx + Math.cos(a) * rad;
+        const y = cy + Math.sin(a) * rad * 0.62; // a shallow tilt reads as depth
+
+        ctx.globalAlpha = fade * 0.16;
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, rad, rad * 0.62, 0, 0, TAU);
+        ctx.stroke();
+
+        ctx.globalAlpha = Math.min(1, fade * 1.3);
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(x, y, Math.max(2, p.r * 0.12), 0, TAU);
+        ctx.fill();
+      }
+    },
+  },
+
+  rain: {
+    label: 'Rain',
+    positional: false,
+    note: 'Events fall, gather speed and break on the surface. The natural partner to the Water kit.',
+    init(api) {
+      api.scene.drops = [];
+      api.scene.splashes = [];
+    },
+    event(p, api) {
+      api.scene.drops.push({ x: p.x, y: -10, v: 60 + p.r * 2.2, r: Math.max(1.2, p.r * 0.08), color: p.color });
+      if (api.scene.drops.length > 400) api.scene.drops.shift();
+    },
+    frame(ctx, api) {
+      const s = api.scene;
+      if (!s.drops) return;
+      const step = Math.min(0.05, api.dt / 1000);
+      const surface = api.h * 0.86;
+      for (let i = s.drops.length - 1; i >= 0; i--) {
+        const d = s.drops[i];
+        d.v += 900 * step; // gravity, so the fall accelerates rather than drifts
+        const prev = d.y;
+        d.y += d.v * step;
+        ctx.globalAlpha = 0.8;
+        ctx.strokeStyle = d.color;
+        ctx.lineWidth = d.r;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(d.x, prev);
+        ctx.lineTo(d.x, Math.min(d.y, surface));
+        ctx.stroke();
+        if (d.y >= surface) {
+          s.splashes.push({ x: d.x, born: api.now, color: d.color, r: d.r });
+          s.drops.splice(i, 1);
+        }
+      }
+      for (let i = s.splashes.length - 1; i >= 0; i--) {
+        const sp = s.splashes[i];
+        const age = (api.now - sp.born) / 1000;
+        if (age > 1.1) {
+          s.splashes.splice(i, 1);
+          continue;
+        }
+        ctx.globalAlpha = Math.max(0, 0.5 * (1 - age / 1.1));
+        ctx.strokeStyle = sp.color;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.ellipse(sp.x, surface, age * 90, age * 16, 0, 0, TAU);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 0.25;
+      ctx.strokeStyle = api.palette.default;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, surface + 0.5);
+      ctx.lineTo(api.w, surface + 0.5);
+      ctx.stroke();
+    },
+  },
+
+  truchet: {
+    label: 'Truchet',
+    positional: false,
+    note: 'Quarter-arc tiles that flip as events land, so unbroken curves wander across the whole field.',
+    init(api) {
+      // Larger tiles: at sixteen across the curves read as texture rather than
+      // as the continuous lines that are the whole point of a Truchet field.
+      const cell = Math.max(44, Math.min(api.w, api.h) / 9);
+      const cols = Math.max(1, Math.ceil(api.w / cell));
+      const rows = Math.max(1, Math.ceil(api.h / cell));
+      api.scene.cols = cols;
+      api.scene.rows = rows;
+      api.scene.flip = new Uint8Array(cols * rows);
+      api.scene.heat = new Float32Array(cols * rows);
+      for (let i = 0; i < cols * rows; i++) api.scene.flip[i] = Math.random() < 0.5 ? 1 : 0;
+    },
+    event(p, api) {
+      const s = api.scene;
+      if (!s.flip) return;
+      const cx = Math.min(s.cols - 1, Math.floor((p.x / api.w) * s.cols));
+      const cy = Math.min(s.rows - 1, Math.floor((p.y / api.h) * s.rows));
+      const i = Math.max(0, cy * s.cols + cx);
+      s.flip[i] ^= 1;
+      s.heat[i] = 1;
+      s.lastColor = p.color;
+    },
+    frame(ctx, api) {
+      const s = api.scene;
+      if (!s.flip) return;
+      const w = api.w / s.cols;
+      const h = api.h / s.rows;
+      const decay = Math.min(0.05, api.dt / 1000) * 0.5;
+      ctx.lineWidth = Math.max(2, Math.min(w, h) * 0.16);
+      ctx.lineCap = 'butt';
+      for (let y = 0; y < s.rows; y++) {
+        for (let x = 0; x < s.cols; x++) {
+          const i = y * s.cols + x;
+          s.heat[i] = Math.max(0, s.heat[i] - decay);
+          const x0 = x * w;
+          const y0 = y * h;
+          ctx.globalAlpha = 0.5 + s.heat[i] * 0.5;
+          ctx.strokeStyle = s.heat[i] > 0.05 ? s.lastColor || api.palette.default : api.palette.default;
+          ctx.beginPath();
+          if (s.flip[i]) {
+            ctx.arc(x0, y0, w / 2, 0, Math.PI / 2);
+            ctx.moveTo(x0 + w, y0 + h);
+            ctx.arc(x0 + w, y0 + h, w / 2, Math.PI, Math.PI * 1.5);
+          } else {
+            ctx.arc(x0 + w, y0, w / 2, Math.PI / 2, Math.PI);
+            ctx.moveTo(x0, y0 + h);
+            ctx.arc(x0, y0 + h, w / 2, Math.PI * 1.5, TAU);
+          }
+          ctx.stroke();
+        }
+      }
+    },
+  },
+
+  polar: {
+    label: 'Tree rings',
+    positional: false,
+    note: 'A clock face: arrival sets the angle, size sets the distance out. History accumulates as rings.',
+    init(api) {
+      api.scene.marks = [];
+      api.scene.t0 = 0;
+    },
+    event(p, api) {
+      const s = api.scene;
+      if (!s.t0) s.t0 = api.now;
+      s.marks.push({ born: api.now, r: p.r, color: p.color });
+      if (s.marks.length > 900) s.marks.shift();
+    },
+    frame(ctx, api) {
+      const s = api.scene;
+      if (!s.marks) return;
+      const cx = api.w / 2;
+      const cy = api.h / 2;
+      const maxR = Math.min(api.w, api.h) * 0.46;
+      const PERIOD = 60000; // one full turn a minute, so the sweep is legible
+      ctx.globalAlpha = 0.2;
+      ctx.strokeStyle = api.palette.default;
+      ctx.lineWidth = 1;
+      for (const frac of [0.33, 0.66, 1]) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, maxR * frac, 0, TAU);
+        ctx.stroke();
+      }
+      for (const m of s.marks) {
+        const a = ((m.born - s.t0) / PERIOD) * TAU - Math.PI / 2;
+        const rad = 18 + (m.r / 90) * (maxR - 18);
+        const fade = Math.max(0.15, 1 - (api.now - m.born) / 90000);
+        ctx.globalAlpha = fade * 0.85;
+        ctx.fillStyle = m.color;
+        ctx.beginPath();
+        ctx.arc(cx + Math.cos(a) * rad, cy + Math.sin(a) * rad, Math.max(1.5, m.r * 0.09), 0, TAU);
+        ctx.fill();
+      }
+    },
+  },
+
+  terrain: {
+    label: 'Terrain',
+    positional: false,
+    note: 'A ridgeline pushed up by each event and scrolling away, leaving the profile of what has happened.',
+    init(api) {
+      // Coarser columns and a fast scroll, so the visible width is a few
+      // seconds of history that fills straight away rather than a thin pile
+      // creeping in from the right edge.
+      api.scene.cols = Math.max(40, Math.floor(api.w / 9));
+      api.scene.ridge = new Float32Array(api.scene.cols);
+      api.scene.shift = 0;
+      api.scene.speed = api.scene.cols / 12; // columns per second
+    },
+    event(p, api) {
+      const s = api.scene;
+      if (!s.ridge) return;
+      const at = s.cols - 1;
+      const lift = Math.min(api.h * 0.42, p.r * 1.9);
+      // Spread the push over a few columns so the ridge reads as a hill.
+      for (let d = -4; d <= 4; d++) {
+        const i = at + d;
+        if (i < 0 || i >= s.cols) continue;
+        s.ridge[i] = Math.max(s.ridge[i], lift * (1 - Math.abs(d) / 5));
+      }
+      s.lastColor = p.color;
+    },
+    frame(ctx, api) {
+      const s = api.scene;
+      if (!s.ridge) return;
+      s.shift += (api.dt / 1000) * (s.speed || 12);
+      while (s.shift >= 1) {
+        s.ridge.copyWithin(0, 1);
+        s.ridge[s.cols - 1] = 0;
+        s.shift -= 1;
+      }
+      // A gentle settle, so a very busy feed cannot push every column to the
+      // ceiling and turn the ridgeline into a filled slab -- but slow enough
+      // that a peak survives its journey across the screen, which is the
+      // whole point of keeping a profile of what happened.
+      const relax = 1 - Math.min(0.3, (api.dt / 1000) * 0.07);
+      for (let i = 0; i < s.cols; i++) s.ridge[i] *= relax;
+      const base = api.h * 0.9;
+      const step = api.w / (s.cols - 1);
+      ctx.beginPath();
+      ctx.moveTo(0, base);
+      for (let i = 0; i < s.cols; i++) ctx.lineTo(i * step, base - s.ridge[i]);
+      ctx.lineTo(api.w, base);
+      ctx.closePath();
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = s.lastColor || api.palette.default;
+      ctx.fill();
+      // The outline uses the palette's brightest role, so the profile stays
+      // legible even when the fill sits close to the ground colour.
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = api.palette.default;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    },
+  },
+
+  radar: {
+    label: 'Radar',
+    note: 'A sweep that lights each event as it passes, so the field is read once a turn.',
+    init(api) {
+      api.scene.angle = 0;
+    },
+    frame(ctx, api) {
+      const s = api.scene;
+      const cx = api.w / 2;
+      const cy = api.h / 2;
+      const reach = Math.hypot(api.w, api.h) / 2;
+      s.angle = (s.angle + (api.dt / 1000) * 1.1) % TAU;
+
+      ctx.globalAlpha = 0.4;
+      ctx.strokeStyle = api.palette.default;
+      ctx.lineWidth = 1;
+      for (const frac of [0.33, 0.66, 1]) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, reach * frac * 0.7, 0, TAU);
+        ctx.stroke();
+      }
+
+      // A wedge trailing the beam, not a hairline: a single stroke at low
+      // opacity simply disappears against a dark ground.
+      const tip = { x: cx + Math.cos(s.angle) * reach, y: cy + Math.sin(s.angle) * reach };
+      const wedge = ctx.createRadialGradient(cx, cy, 0, cx, cy, reach);
+      wedge.addColorStop(0, api.palette.default);
+      wedge.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.globalAlpha = 0.22;
+      ctx.fillStyle = wedge;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, reach, s.angle - 0.55, s.angle);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.globalAlpha = 0.85;
+      ctx.strokeStyle = api.palette.default;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(tip.x, tip.y);
+      ctx.stroke();
+
+      for (const p of api.particles) {
+        const fade = 1 - (api.now - p.born) / p.life;
+        // How long since the beam last crossed this point, as a fraction of a turn.
+        let behind = s.angle - Math.atan2(p.y - cy, p.x - cx);
+        behind = ((behind % TAU) + TAU) % TAU;
+        const lit = Math.max(0, 1 - behind / (TAU * 0.75));
+        ctx.globalAlpha = fade * (0.28 + lit * 0.72);
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, Math.max(2.5, p.r * 0.22), 0, TAU);
+        ctx.fill();
+      }
+    },
+  },
 };
 
 export const SCENE_NAMES = Object.keys(SCENES);

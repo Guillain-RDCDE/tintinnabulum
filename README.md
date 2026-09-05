@@ -282,7 +282,7 @@ vision.
 
 ### Visualisations
 
-A scene decides what a moment of data looks like. Seven ship:
+A scene decides what a moment of data looks like. Thirteen ship:
 
 | Scene | What it draws |
 |---|---|
@@ -290,8 +290,14 @@ A scene decides what a moment of data looks like. Seven ship:
 | **Constellation** | Events become stars and join to their neighbours; bursts draw themselves as clusters |
 | **Flow field** | Each event releases a mote into a slowly turning noise field, and it draws where it drifts |
 | **Ripples** | Concentric wavefronts that cross and interfere |
-| **Grid** | An ordered grid that each event knocks out of true, settling back over time — after Vera Molnár |
-| **Spiral** | Events laid on a golden-angle spiral in arrival order, so the sequence itself becomes the form |
+| **Grid** | An ordered grid that each event knocks out of true, settling back — after Vera Molnár |
+| **Truchet** | Quarter-arc tiles that flip as events land, so unbroken curves wander the field |
+| **Orbits** | Each event is captured into an orbit; small ones fast and close, large ones slow and wide |
+| **Rain** | Events fall, gather speed and break on a surface. The partner to the Water kit |
+| **Radar** | A sweep that lights each event as it passes, so the field is read once a turn |
+| **Spiral** | Events laid on a golden-angle spiral in arrival order, so the sequence becomes the form |
+| **Tree rings** | A clock face: arrival sets the angle, size the distance out |
+| **Terrain** | A ridgeline pushed up by each event and scrolling away, leaving a profile of what happened |
 | **Skyline** | A scrolling record: one bar per event, height by size |
 
 **Adding one is adding an object** to
