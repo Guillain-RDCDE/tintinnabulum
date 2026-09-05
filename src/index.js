@@ -19,6 +19,7 @@ export {
   makeKit,
   renderKitWaveform,
 } from './audio/instruments.js';
+export { drawKitArt, KIT_ART_NAMES } from './visual/kit-art.js';
 
 export { CanvasSink, DEFAULT_PALETTE } from './visual/canvas-sink.js';
 export {

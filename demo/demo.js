@@ -8,7 +8,7 @@ import {
   DEFAULT_PALETTE_NAME,
   swatchOf,
   KITS,
-  renderKitWaveform,
+  drawKitArt,
   SHAPES,
   DEFAULT_SHAPE,
   drawShape,
@@ -350,17 +350,19 @@ async function selectKit(name, { persist = true, audition = true } = {}) {
   }
 }
 
-// Each card carries the instrument's own waveform, rendered from the kit
-// itself, so it cannot show a shape the sound does not have.
-async function paintKitWave(cv, name) {
+// Each card carries a drawn signature rather than a waveform. An envelope is
+// accurate and unreadable: twelve of them side by side look like twelve of the
+// same thing, and the point of a picker is that you recognise the water and
+// the night without reading the labels.
+function paintKitArt(cv, name) {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const w = cv.clientWidth || 148;
-  const h = 56;
+  const h = 64;
   cv.width = Math.round(w * dpr);
   cv.height = Math.round(h * dpr);
   const c = cv.getContext('2d');
   c.setTransform(dpr, 0, 0, dpr, 0, 0);
-  await renderKitWaveform(c, name, { w, h, palette: PALETTES[canvas.paletteName].colors });
+  drawKitArt(c, name, { w, h, palette: PALETTES[canvas.paletteName].colors });
 }
 
 for (const [name, def] of Object.entries(KITS)) {
@@ -386,12 +388,12 @@ for (const [name, def] of Object.entries(KITS)) {
 
 // Waveforms are rendered one after another rather than all at once: each is a
 // short offline render, and a dozen in parallel stalls the first paint.
-async function paintKitWaves() {
+function paintKitWaves() {
   for (const b of $('#kits').children) {
     // One kit failing must not cost the other eleven their thumbnails, which
     // is exactly what a bare sequential await did.
     try {
-      await paintKitWave(b.querySelector('canvas'), b.dataset.kit);
+      paintKitArt(b.querySelector('canvas'), b.dataset.kit);
     } catch (e) {
       console.warn('waveform failed for ' + b.dataset.kit, e);
     }

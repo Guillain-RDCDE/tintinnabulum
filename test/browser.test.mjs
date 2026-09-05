@@ -325,7 +325,8 @@ const waves = await page.evaluate(() =>
     // A canvas left at the HTML default of 300x150 was never painted at all,
     // which is how twelve blank cards once passed a check for "some ink".
     const sized = cv.width > 0 && Math.abs(cv.width / (window.devicePixelRatio || 1) - r.width) < 8;
-    const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
+    const ctx2 = cv.getContext('2d');
+    const d = ctx2.getImageData(0, 0, cv.width, cv.height).data;
     const bg = [d[0], d[1], d[2]];
     let ink = 0;
     let total = 0;
@@ -333,18 +334,42 @@ const waves = await page.evaluate(() =>
       total++;
       if (Math.abs(d[i] - bg[0]) + Math.abs(d[i + 1] - bg[1]) + Math.abs(d[i + 2] - bg[2]) > 20) ink++;
     }
-    return { name: b.dataset.kit, sized, share: total ? ink / total : 0 };
+    // A coarse 8x4 fingerprint of where the ink sits, for telling the motifs
+    // apart from one another.
+    const cols = 8;
+    const rows = 4;
+    const grid = new Array(cols * rows).fill(0);
+    for (let y = 0; y < cv.height; y++) {
+      for (let x = 0; x < cv.width; x++) {
+        const i = (y * cv.width + x) * 4;
+        if (Math.abs(d[i] - bg[0]) + Math.abs(d[i + 1] - bg[1]) + Math.abs(d[i + 2] - bg[2]) > 20) {
+          grid[Math.floor((y / cv.height) * rows) * cols + Math.floor((x / cv.width) * cols)]++;
+        }
+      }
+    }
+    const peak = Math.max(1, ...grid);
+    return {
+      name: b.dataset.kit,
+      sized,
+      share: total ? ink / total : 0,
+      print: grid.map((v) => Math.round((v / peak) * 9)).join(''),
+    };
   })
 );
 const unsized = waves.filter((c) => !c.sized);
 ok('every kit canvas is painted at its displayed size', unsized.length === 0,
    unsized.map((c) => c.name).join(' ') || waves.length + ' sized');
-// A waveform covers a real share of the panel. The centre line alone is under
-// two per cent, which is what the previous threshold accepted.
-const flatCards = waves.filter((c) => c.share < 0.06);
-ok('every kit card shows its own waveform, not just an axis', flatCards.length === 0,
+const flatCards = waves.filter((c) => c.share < 0.04);
+ok('every kit card carries a real motif', flatCards.length === 0,
    flatCards.map((c) => `${c.name}(${(c.share * 100).toFixed(1)}%)`).join(' ') ||
-     'thinnest ' + (Math.min(...waves.map((c) => c.share)) * 100).toFixed(1) + '%');
+     'lightest ' + (Math.min(...waves.map((c) => c.share)) * 100).toFixed(1) + '%');
+
+// The whole point of replacing the waveforms: you should be able to tell the
+// water from the night without reading the label. Identical fingerprints would
+// mean twelve cards that look like one card.
+const prints = new Set(waves.map((c) => c.print));
+ok('no two kits look the same', prints.size === waves.length,
+   `${prints.size} distinct motifs for ${waves.length} kits`);
 
 // The pitch-swept presets are the new mechanism, so they get their own check:
 // a sweep that fails leaves a flat tone, which still passes a peak test.
