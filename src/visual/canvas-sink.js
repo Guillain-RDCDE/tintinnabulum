@@ -1,5 +1,6 @@
-import { unitPosition } from '../core/event.js';
+import { rngFrom } from '../core/event.js';
 import { PALETTES, DEFAULT_PALETTE_NAME, resolvePalette } from './palettes.js';
+import { SHAPES, SHAPE_NAMES, DEFAULT_SHAPE, drawShape, isHollow } from './shapes.js';
 
 // Canvas 2D rewrite of the original D3 v3 visuals.
 //
@@ -9,6 +10,7 @@ import { PALETTES, DEFAULT_PALETTE_NAME, resolvePalette } from './palettes.js';
 // circle plus a transition per circle is thousands of DOM mutations a minute.
 
 export { PALETTES, DEFAULT_PALETTE_NAME, resolvePalette } from './palettes.js';
+export { SHAPES, SHAPE_NAMES, DEFAULT_SHAPE } from './shapes.js';
 
 /** The default colours, kept as a named export for convenience. */
 export const DEFAULT_PALETTE = resolvePalette(DEFAULT_PALETTE_NAME);
@@ -35,6 +37,13 @@ export class CanvasSink {
     this.showHud = opts.showHud !== false;
     this.maxParticles = opts.maxParticles ?? 800;
     this.margin = opts.margin ?? 8;
+
+    this.shape =
+      SHAPES[opts.shape] || opts.shape === 'mixed' ? opts.shape : DEFAULT_SHAPE;
+    // (SHAPES[name] covers the named shapes; 'mixed' is the per-event variant.)
+    this.starfield = Boolean(opts.starfield);
+    this.starCount = opts.starCount ?? 140;
+    this._stars = null;
 
     this.particles = [];
     this.banners = [];
@@ -105,6 +114,29 @@ export class CanvasSink {
    * the category they were born with, so a change takes effect immediately
    * instead of waiting for the canvas to turn over.
    */
+  /** Switch the mark shape at runtime. 'mixed' varies it per event id. */
+  setShape(name) {
+    if (SHAPES[name] || name === 'mixed') this.shape = name;
+    return this;
+  }
+
+  /** Faint fixed stars behind the marks. Deterministic, so they never crawl. */
+  setStarfield(on) {
+    this.starfield = Boolean(on);
+    return this;
+  }
+
+  _buildStars() {
+    const r = rngFrom('tintinnabulum-starfield');
+    this._stars = Array.from({ length: this.starCount }, () => ({
+      u: r(),
+      v: r(),
+      r: 0.4 + r() * 1.3,
+      phase: r() * Math.PI * 2,
+      speed: 0.4 + r() * 0.9,
+    }));
+  }
+
   setPalette(nameOrColors) {
     this.palette = resolvePalette(nameOrColors);
     this.paletteName =
@@ -123,10 +155,18 @@ export class CanvasSink {
     this._recent.push(ev.ts);
 
     const r = Math.max(this.minRadius, Math.sqrt(ev.map.p) * this.maxRadius);
-    const { u, v } = unitPosition(ev.id);
+    // One stream per id: position, then rotation, then the shape draw. Stable,
+    // so a repeat event returns identical in every respect.
+    const rnd = rngFrom(ev.id);
+    const u = rnd();
+    const v = rnd();
+    const rot = rnd() * Math.PI * 2;
+    const pick = rnd();
     const p = {
       u,
       v,
+      rot,
+      pick,
       r,
       x: 0,
       y: 0,
@@ -185,6 +225,30 @@ export class CanvasSink {
     ctx.fillStyle = this.palette.background;
     ctx.fillRect(0, 0, this.w, this.h);
 
+    if (this.starfield) {
+      if (!this._stars) this._buildStars();
+      ctx.fillStyle = this.palette.text;
+      for (const s of this._stars) {
+        // Slow, per-star phase so the sky breathes instead of blinking together.
+        const tw = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin((now / 1000) * s.speed + s.phase));
+        const x = s.u * this.w;
+        const y = s.v * this.h;
+        ctx.globalAlpha = 0.55 * tw;
+        ctx.beginPath();
+        ctx.arc(x, y, s.r, 0, Math.PI * 2);
+        ctx.fill();
+        // The brightest few get a soft halo, which is what stops the field
+        // reading as evenly scattered dust.
+        if (s.r > 1.35) {
+          ctx.globalAlpha = 0.14 * tw;
+          ctx.beginPath();
+          ctx.arc(x, y, s.r * 3.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
       const age = now - p.born;
@@ -194,22 +258,22 @@ export class CanvasSink {
       }
       const fade = 1 - age / p.life;
 
-      // Shockwave ring, as in the original.
+      // Shockwave, in the same shape as the mark it came from.
       if (p.ring && age < this.ringLife) {
         const t = Math.sqrt(age / this.ringLife); // ease-out
         ctx.globalAlpha = (1 - t) * 0.35;
         ctx.strokeStyle = p.color;
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, p.r + 20 + t * 20, 0, Math.PI * 2);
+        drawShape(ctx, this.shape, p.x, p.y, p.r + 20 + t * 20, p.rot, p.pick);
         ctx.stroke();
       }
 
       ctx.globalAlpha = p.alpha0 * fade;
       ctx.fillStyle = p.color;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-      ctx.fill();
+      drawShape(ctx, this.shape, p.x, p.y, p.r, p.rot, p.pick);
+      ctx.fill(isHollow(this.shape) ? 'evenodd' : 'nonzero');
 
       const hovered = this._hover === p;
       if (p.label && (hovered || (this.showLabels && age < this.labelLife && p.ring))) {

@@ -141,6 +141,70 @@ export const PALETTES = {
     },
   },
 
+  nordic: {
+    label: 'Nordic',
+    note: 'Ice and steel. Cool, restrained, easy to read for long stretches.',
+    colors: {
+      background: '#0f1720',
+      default: '#eef4f8',
+      user: '#eef4f8',
+      anon: '#4aa8c0',
+      bot: '#8a7a63',
+      alert: '#ffb454',
+      text: '#f2f7fa',
+      banner: 'rgba(74, 168, 192, 0.75)',
+      hud: 'rgba(74, 168, 192, 0.45)',
+    },
+  },
+
+  marine: {
+    label: 'Marine',
+    note: 'Deep water. Foam, shallows and the dark below.',
+    colors: {
+      background: '#04141c',
+      default: '#dff3f4',
+      user: '#dff3f4',
+      anon: '#39b7a8',
+      bot: '#186b86',
+      alert: '#ffd25e',
+      text: '#eafafa',
+      banner: 'rgba(57, 183, 168, 0.75)',
+      hud: 'rgba(57, 183, 168, 0.45)',
+    },
+  },
+
+  lacquer: {
+    label: 'Lacquer',
+    note: 'Vermilion and gold on black, after Japanese lacquerware.',
+    colors: {
+      background: '#0e0a0a',
+      default: '#f4ece0',
+      user: '#f4ece0',
+      anon: '#e03a26',
+      bot: '#7d7468',
+      alert: '#e8b44a',
+      text: '#f7f1e8',
+      banner: 'rgba(224, 58, 38, 0.78)',
+      hud: 'rgba(224, 58, 38, 0.45)',
+    },
+  },
+
+  solar: {
+    label: 'Solar',
+    note: 'Full daylight spectrum on deep navy. The brightest of the set.',
+    colors: {
+      background: '#0a1020',
+      default: '#fff4dc',
+      user: '#fff4dc',
+      anon: '#ffb02e',
+      bot: '#c25a1c',
+      alert: '#5ec8e5',
+      text: '#fff8e8',
+      banner: 'rgba(255, 176, 46, 0.75)',
+      hud: 'rgba(255, 176, 46, 0.45)',
+    },
+  },
+
   monochrome: {
     label: 'Monochrome',
     note: 'Categories separated by lightness alone, so colour vision is never required.',

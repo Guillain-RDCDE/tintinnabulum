@@ -187,14 +187,16 @@ itself, so the project runs from any mount point.
 
 ### Palettes
 
-Nine, selectable at runtime and stored as plain data in
+Thirteen, selectable at runtime and stored as plain data in
 [`src/visual/palettes.js`](src/visual/palettes.js):
 
 | | | |
 |---|---|---|
 | **Nocturne** — slate blue, the default | **Bronze** — brass and copper | **Aurora** — mint and violet |
 | **Ember** — banked fire | **Ultraviolet** — magenta and cyan | **Blueprint** — technical, calmest |
-| **Sakura** — blossom on plum | **Daylight** — ink on paper, for projectors | **Monochrome** — lightness only |
+| **Sakura** — blossom on plum | **Nordic** — ice and steel | **Marine** — deep water |
+| **Lacquer** — vermilion and gold on black | **Solar** — daylight on deep navy | **Daylight** — ink on paper, for projectors |
+| **Monochrome** — lightness only | | |
 
 ```js
 new CanvasSink('#canvas', { palette: 'bronze' });
@@ -210,6 +212,32 @@ luminance contrast, because two colours can differ obviously to the eye while
 sharing a luminance band. *Monochrome* is the deliberate exception, held to a
 lightness floor instead, since its purpose is to remain readable without colour
 vision.
+
+### Shapes
+
+Events are not obliged to be circles. Eight marks are available, plus `mixed`,
+which assigns one per event from its identity — so a given article keeps the
+same shape as well as the same place on screen.
+
+| | | | |
+|---|---|---|---|
+| **Circle** — area tracks size directly | **Star** — five points | **Sparkle** — four-point twinkle | **Diamond** |
+| **Hexagon** | **Burst** — eight thin rays | **Ring** — hollow, stays readable when crowded | **Petal** — six rounded lobes |
+
+```js
+new CanvasSink('#canvas', { shape: 'star', starfield: true });
+sink.setShape('mixed');
+sink.setStarfield(true);
+```
+
+The shockwave that expands from each event takes the shape of the mark that
+produced it. `starfield` adds a fixed, slowly breathing field of stars behind
+everything, drawn from a stable seed so it never crawls.
+
+Shapes are pure geometry in [`src/visual/shapes.js`](src/visual/shapes.js): a
+`draw(ctx, x, y, r, rot)` that builds a path, nothing more. The swatches in the
+sandbox are drawn with the same function as the canvas, so a preview can never
+drift from what you actually get.
 
 ### Tests
 

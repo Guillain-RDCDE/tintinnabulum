@@ -304,6 +304,77 @@ await page.evaluate(() => window.son.unlock());
 ok('audio unlocks again after the reload',
    (await page.evaluate(() => window.son.engine.ctx.state)) === 'running');
 
+// --- the way out of the sandbox -----------------------------------------
+// Without this a shared link is a dead end: no way to reach the project.
+const homeHref = await page.getAttribute('#home', 'href');
+const srcHref = await page.getAttribute('#source-link', 'href');
+const REPO = 'https://github.com/Guillain-RDCDE/tintinnabulum';
+ok('the title links back to the repository', homeHref === REPO, String(homeHref));
+ok('there is a visible source link too', srcHref === REPO, String(srcHref));
+
+// --- shape picker --------------------------------------------------------
+const shapeCountAdv = await page.locator('#shapes .shp').count();
+const shapeCountSimple = await page.locator('#shapes-simple .shp').count();
+ok('shapes are offered in both views', shapeCountAdv >= 7 && shapeCountAdv === shapeCountSimple,
+   `${shapeCountAdv} / ${shapeCountSimple}`);
+ok('the shape swatches are drawn, not empty', await page.evaluate(() => {
+  const cv = document.querySelector('#shapes .shp canvas');
+  const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
+  let lit = 0;
+  for (let i = 3; i < d.length; i += 4 * 41) if (d[i] > 10) lit++;
+  return lit > 5;
+}));
+
+// Draw one event of known identity, snapshot, change shape, redraw, compare.
+// Same id and same delay, so only the geometry differs between the two.
+const renderWith = async (shape) => {
+  await page.click(`#shapes .shp[data-shape="${shape}"]`);
+  return page.evaluate(async () => {
+    const sink = window.son.sinks.find((s) => s.particles);
+    sink.clear();
+    window.son.emit({ magnitude: 90000, id: 'shape-probe' });
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const c = document.querySelector('#canvas');
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let sum = 0;
+    for (let i = 0; i < d.length; i += 4 * 37) sum += d[i] + d[i + 1] + d[i + 2];
+    return sum;
+  });
+};
+const sigCircle = await renderWith('circle');
+const sigStar = await renderWith('star');
+const sigRing = await renderWith('ring');
+ok('switching to a star changes what is drawn', sigCircle !== sigStar, `${sigCircle} vs ${sigStar}`);
+ok('the hollow ring differs from both', sigRing !== sigCircle && sigRing !== sigStar, String(sigRing));
+ok('the sink reports the shape in use',
+   (await page.evaluate(() => window.son.sinks.find((s) => s.particles).shape)) === 'ring');
+
+// --- starry sky ----------------------------------------------------------
+const emptyGround = async () =>
+  page.evaluate(async () => {
+    const sink = window.son.sinks.find((s) => s.particles);
+    sink.clear();
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const c = document.querySelector('#canvas');
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let sum = 0;
+    for (let i = 0; i < d.length; i += 4 * 13) sum += d[i] + d[i + 1] + d[i + 2];
+    return sum;
+  });
+const plainGround = await emptyGround();
+await page.check('#starfield');
+const starryGround = await emptyGround();
+// Not merely "different": the sky has to be visible, so require a real change
+// on an otherwise empty canvas rather than a few stray pixels.
+const starDelta = Math.abs(starryGround - plainGround) / plainGround;
+ok('the starry sky is plainly visible on an empty canvas', starDelta > 0.004,
+   `${(starDelta * 100).toFixed(2)}% change`);
+ok('the sink records the starfield setting',
+   (await page.evaluate(() => window.son.sinks.find((s) => s.particles).starfield)) === true);
+ok('both views share one starfield control',
+   await page.isChecked('#starfield-simple'));
+await page.uncheck('#starfield');
+
 // --- recorder -----------------------------------------------------------
 const rec = await page.evaluate(async () => {
   const { Recorder } = await import('../src/audio/recorder-sink.js');

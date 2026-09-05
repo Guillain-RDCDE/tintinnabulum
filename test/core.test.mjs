@@ -227,5 +227,80 @@ const sw = swatchOf('bronze');
 ok('swatchOf returns a ground and four dots',
    Boolean(sw.background) && sw.dots.length === 4 && sw.dots.every(Boolean));
 
+// --- shapes -------------------------------------------------------------
+// Exercised against a recording stub rather than a real canvas: what matters
+// here is that every shape emits a path of the right size, which is checkable
+// without a browser. A shape that silently draws nothing must fail.
+
+const { SHAPES, SHAPE_NAMES, MIXED_POOL, DEFAULT_SHAPE, drawShape, isHollow } = await import(
+  '../src/visual/shapes.js'
+);
+
+function recorder() {
+  const pts = [];
+  let ops = 0;
+  const push = (x, y) => pts.push([x, y]);
+  return {
+    pts,
+    get ops() {
+      return ops;
+    },
+    moveTo(x, y) { ops++; push(x, y); },
+    lineTo(x, y) { ops++; push(x, y); },
+    quadraticCurveTo(cx, cy, x, y) { ops++; push(cx, cy); push(x, y); },
+    arc(x, y, r) { ops++; push(x - r, y); push(x + r, y); push(x, y - r); push(x, y + r); },
+    closePath() {},
+  };
+}
+
+ok('shape registry is populated', SHAPE_NAMES.length >= 6, SHAPE_NAMES.length + ' shapes');
+ok('the default shape exists', Boolean(SHAPES[DEFAULT_SHAPE]), DEFAULT_SHAPE);
+ok('mixed draws only from registered shapes',
+   MIXED_POOL.every((n) => SHAPES[n]), MIXED_POOL.join(','));
+
+let shapeStructure = true;
+let emptyShape = '';
+let oversized = '';
+for (const name of SHAPE_NAMES) {
+  const s = SHAPES[name];
+  if (!s.label || !s.note || typeof s.draw !== 'function') {
+    shapeStructure = false;
+    console.log('   incomplete shape: ' + name);
+  }
+  const ctx = recorder();
+  drawShape(ctx, name, 100, 100, 20, 0.3, 0.5);
+  if (ctx.ops < 1 || ctx.pts.length < 3) emptyShape = name;
+  for (const [x, y] of ctx.pts) {
+    if (Math.hypot(x - 100, y - 100) > 20 * 1.45) oversized = `${name} (${Math.round(Math.hypot(x - 100, y - 100))})`;
+  }
+}
+ok('every shape declares a label, a note and a draw function', shapeStructure);
+ok('every shape actually emits a path', !emptyShape, emptyShape || 'all draw');
+ok('no shape overruns its radius', !oversized, oversized || 'all within bounds');
+
+const c1 = recorder();
+drawShape(c1, 'nonexistent-shape', 10, 10, 5);
+ok('an unknown shape falls back rather than throwing', c1.ops > 0);
+
+const mixA = recorder();
+const mixB = recorder();
+drawShape(mixA, 'mixed', 50, 50, 10, 0, 0.31);
+drawShape(mixB, 'mixed', 50, 50, 10, 0, 0.31);
+ok('mixed is deterministic for a given event',
+   JSON.stringify(mixA.pts) === JSON.stringify(mixB.pts));
+const mixC = recorder();
+drawShape(mixC, 'mixed', 50, 50, 10, 0, 0.87);
+ok('mixed does vary across events', JSON.stringify(mixA.pts) !== JSON.stringify(mixC.pts));
+
+ok('rotation actually rotates the path', (() => {
+  const a = recorder();
+  const b = recorder();
+  drawShape(a, 'star', 0, 0, 10, 0);
+  drawShape(b, 'star', 0, 0, 10, 1.1);
+  return JSON.stringify(a.pts) !== JSON.stringify(b.pts);
+})());
+
+ok('ring is the hollow one', isHollow('ring') && !isHollow('circle'));
+
 console.log(fails ? `\n${fails} FAILURE(S)` : '\nall core checks passed');
 process.exit(fails ? 1 : 0);

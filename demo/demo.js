@@ -6,6 +6,9 @@ import {
   PALETTES,
   DEFAULT_PALETTE_NAME,
   swatchOf,
+  SHAPES,
+  DEFAULT_SHAPE,
+  drawShape,
   wikipedia,
   ingestSource,
   randomSource,
@@ -191,6 +194,10 @@ function selectPalette(name, persist = true) {
     }
   }
   if (persist) store.set('tintinnabulum:palette', name);
+  // The shape swatches are drawn in the palette's own colours, so they follow.
+  if (typeof repaintShapeSwatches === 'function' && $('#shapes').children.length) {
+    repaintShapeSwatches();
+  }
 }
 
 for (const grid of grids) {
@@ -211,6 +218,81 @@ for (const grid of grids) {
   }
 }
 selectPalette(canvas.paletteName, false);
+
+// --- shape picker ---------------------------------------------------------
+// Each swatch is drawn with the same drawShape() the canvas uses, so the
+// preview can never drift from what you actually get.
+
+const shapeNote = $('#shape-note');
+const shapeGrids = [$('#shapes'), $('#shapes-simple')];
+const SHAPE_CHOICES = [...Object.keys(SHAPES), 'mixed'];
+const SHAPE_LABELS = { ...SHAPES, mixed: { label: 'Mixed', note: 'A shape per event, fixed by its identity.' } };
+
+function selectShape(name, persist = true) {
+  canvas.setShape(name);
+  shapeNote.textContent = SHAPE_LABELS[name].note;
+  for (const grid of shapeGrids) {
+    for (const b of grid.children) {
+      b.setAttribute('aria-pressed', String(b.dataset.shape === name));
+    }
+  }
+  if (persist) store.set('tintinnabulum:shape', name);
+}
+
+function paintSwatch(cv, name) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth || 64;
+  const h = 42;
+  cv.width = Math.round(w * dpr);
+  cv.height = Math.round(h * dpr);
+  const c = cv.getContext('2d');
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const colors = PALETTES[canvas.paletteName].colors;
+  cv.style.background = colors.background;
+  c.clearRect(0, 0, w, h);
+  c.fillStyle = colors.anon;
+  c.globalAlpha = 0.85;
+  c.beginPath();
+  drawShape(c, name, w / 2, h / 2, 13, -0.25, 0.4);
+  c.fill(name === 'ring' ? 'evenodd' : 'nonzero');
+}
+
+for (const grid of shapeGrids) {
+  for (const name of SHAPE_CHOICES) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'shp';
+    btn.dataset.shape = name;
+    btn.title = SHAPE_LABELS[name].note;
+    btn.setAttribute('aria-pressed', 'false');
+    const cv = document.createElement('canvas');
+    const small = document.createElement('small');
+    small.textContent = SHAPE_LABELS[name].label;
+    btn.append(cv, small);
+    btn.addEventListener('click', () => selectShape(name));
+    grid.appendChild(btn);
+    requestAnimationFrame(() => paintSwatch(cv, name));
+  }
+}
+
+function repaintShapeSwatches() {
+  for (const grid of shapeGrids) {
+    for (const b of grid.children) paintSwatch(b.querySelector('canvas'), b.dataset.shape);
+  }
+}
+
+const storedShape = store.get('tintinnabulum:shape');
+selectShape(SHAPE_CHOICES.includes(storedShape) ? storedShape : DEFAULT_SHAPE, false);
+
+// --- starry sky -----------------------------------------------------------
+const starBoxes = [$('#starfield'), $('#starfield-simple')];
+function setStarfield(on, persist = true) {
+  canvas.setStarfield(on);
+  for (const b of starBoxes) b.checked = on;
+  if (persist) store.set('tintinnabulum:starfield', on ? '1' : '0');
+}
+for (const b of starBoxes) b.addEventListener('change', () => setStarfield(b.checked));
+setStarfield(store.get('tintinnabulum:starfield') === '1', false);
 
 // --- connection (advanced) ------------------------------------------------
 

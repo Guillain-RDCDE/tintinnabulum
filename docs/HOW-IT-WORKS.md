@@ -343,8 +343,18 @@ inside a bigger site, with no configuration.
   mulberry32 stream giving a fixed point in the unit square. Deterministic, so
   repeat events pile up in one place.
 - **Radius** is `√p × 90` pixels, floored at 3. Area therefore tracks `p`
-  directly, which is why the circles read as proportional rather than
+  directly, which is why the marks read as proportional rather than
   exaggerated.
+- **Shape** is whatever you choose: circle, star, sparkle, diamond, hexagon,
+  burst, ring or petal — or `mixed`, which assigns one per event from the same
+  identity that fixes its position, so an article keeps both its place and its
+  shape. Rotation comes from that stream too; without it every star points the
+  same way and the canvas reads as wallpaper rather than a sky. The shockwave
+  takes the shape of the mark that produced it.
+- **Starfield**, optionally: a fixed field of stars drawn from a stable seed,
+  each with its own slow twinkle phase so the sky breathes instead of blinking
+  in unison. The brightest few carry a soft halo, which is what stops it looking
+  like evenly scattered dust.
 - **Lifecycle**: fade over 12 s; a shockwave ring expands from `r+20` to `r+40`
   over 2.2 s on an ease-out; the label shows for 3 s and on hover; oldest
   particles are culled past 800.

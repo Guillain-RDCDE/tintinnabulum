@@ -18,6 +18,14 @@ export {
 
 export { CanvasSink, DEFAULT_PALETTE } from './visual/canvas-sink.js';
 export {
+  SHAPES,
+  SHAPE_NAMES,
+  MIXED_POOL,
+  DEFAULT_SHAPE,
+  drawShape,
+  isHollow,
+} from './visual/shapes.js';
+export {
   PALETTES,
   PALETTE_KEYS,
   DEFAULT_PALETTE_NAME,

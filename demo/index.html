@@ -17,6 +17,9 @@
   header { display: flex; align-items: baseline; gap: .8em; padding: .7em 1em; flex-wrap: wrap; }
   h1 { font-size: 1.15rem; margin: 0; letter-spacing: .01em; }
   header .tag { color: var(--muted); font-size: .88rem; }
+  h1 a { color: inherit; text-decoration: none; border-bottom: 1px solid transparent; }
+  h1 a:hover { border-bottom-color: var(--accent); color: var(--accent); }
+  header .src { color: var(--accent); text-decoration: none; border-bottom: 1px solid currentColor; }
 
   #stage { position: relative; }
   canvas { display: block; width: 100%; height: 58vh; background: #1c2733; touch-action: manipulation; }
@@ -58,6 +61,20 @@
   .pal[aria-pressed="true"] .chip::after { content: "✓"; position: absolute; right: 5px; bottom: 1px;
                                            font-size: .72rem; color: #fff; text-shadow: 0 0 3px rgba(0,0,0,.9); }
 
+  /* ---- shared: shape picker ---- */
+  .shape-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: .55em; margin-top: .5em; }
+  .shp { border: 2px solid transparent; border-radius: 8px; padding: 0; background: none; cursor: pointer;
+         transition: transform .12s ease, border-color .12s ease; }
+  .shp:hover { transform: translateY(-2px); border-color: #c9d3dc; }
+  .shp canvas { display: block; width: 100%; height: 42px; border-radius: 6px; background: #1c2733;
+                box-shadow: inset 0 0 0 1px rgba(0,0,0,.18); }
+  .shp small { display: block; margin-top: .25em; font-size: .7rem; color: var(--muted); text-align: center; }
+  .shp[aria-pressed="true"] { border-color: var(--accent); }
+  .shp[aria-pressed="true"] small { color: var(--accent); font-weight: 600; }
+
+  .check { display: flex; align-items: center; gap: .5em; margin-top: .9em; font-size: .9rem; }
+  .check input { width: 18px; height: 18px; }
+
   .mode-switch { margin-top: 1.6em; }
   .mode-switch button { font: inherit; padding: .55em .9em; border: 1px solid var(--line);
                         background: #fff; border-radius: 6px; cursor: pointer; color: var(--fg); min-height: 40px; }
@@ -93,8 +110,9 @@
 <body>
 
 <header>
-  <h1>Tintinnabulum</h1>
+  <h1><a id="home" href="https://github.com/Guillain-RDCDE/tintinnabulum">Tintinnabulum</a></h1>
   <span class="tag">listen to a live stream of events</span>
+  <a class="tag src" id="source-link" href="https://github.com/Guillain-RDCDE/tintinnabulum">source and documentation</a>
   <span class="stat" id="stat"></span>
 </header>
 
@@ -118,6 +136,10 @@
 
     <p class="section-label">Colours</p>
     <div class="palette-grid" id="palettes-simple"></div>
+
+    <p class="section-label">Shape</p>
+    <div class="shape-grid" id="shapes-simple"></div>
+    <label class="check"><input type="checkbox" id="starfield-simple"> Starry sky behind the events</label>
 
     <div class="mode-switch">
       <button id="to-advanced" type="button">Advanced settings</button>
@@ -177,9 +199,12 @@
       </fieldset>
 
       <fieldset>
-        <legend>Palette</legend>
+        <legend>Look</legend>
         <div class="palette-grid" id="palettes"></div>
-        <small id="palette-note" class="stat" style="display:block;margin-top:.6em;min-height:2.4em"></small>
+        <small id="palette-note" class="stat" style="display:block;margin-top:.5em;min-height:2.4em"></small>
+        <div class="shape-grid" id="shapes"></div>
+        <small id="shape-note" class="stat" style="display:block;margin-top:.5em;min-height:2.4em"></small>
+        <label class="check"><input type="checkbox" id="starfield"> Starry sky</label>
       </fieldset>
 
       <fieldset>
