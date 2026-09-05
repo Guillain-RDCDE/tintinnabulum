@@ -228,8 +228,13 @@ export class SynthInstrument extends Instrument {
 
 // --- ready-made kits ------------------------------------------------------
 
+// Resolved from this module's own location rather than the site root, so the
+// sample banks are found wherever the project is mounted -- a local server, a
+// GitHub Pages project subpath, or a subdirectory of a larger site.
+export const DEFAULT_SOUND_URL = new URL('../../sounds/', import.meta.url).href;
+
 /** The original Hatnote sound: celesta for additions, clavichord for removals. */
-export function hatnoteKit({ baseUrl = '/sounds/', count = 27 } = {}) {
+export function hatnoteKit({ baseUrl = DEFAULT_SOUND_URL, count = 27 } = {}) {
   const files = [];
   for (let i = 1; i <= count; i++) files.push('c' + String(i).padStart(3, '0'));
   return {

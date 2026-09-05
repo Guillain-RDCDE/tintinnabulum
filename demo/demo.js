@@ -10,9 +10,10 @@ import {
 
 const $ = (sel) => document.querySelector(sel);
 
+// No sampleBaseUrl: the kit resolves the banks relative to the library itself,
+// so this page works from a local server, a GitHub Pages subpath, anywhere.
 const son = new Sonifier({
   kit: 'hatnote',
-  sampleBaseUrl: '/sounds/',
   mapping: { mode: 'adaptive', scale: 'chromatic', range: 27, jitter: 0.5 },
   voices: { maxVoices: 16 },
   volume: 0.7,
@@ -79,7 +80,12 @@ $('#record').onclick = async (ev) => {
 function activeCategories() {
   return new Set([...$('#cats').selectedOptions].map((o) => o.value));
 }
-son.filter((ev) => activeCategories().has(ev.category));
+
+// The checkboxes only govern the categories they actually list. Anything else
+// -- a category of your own arriving through the ingest server, say "warn" --
+// must stay audible, or feeding in custom data yields silence with no clue why.
+const LISTED = new Set([...$('#cats').options].map((o) => o.value));
+son.filter((ev) => !LISTED.has(ev.category) || activeCategories().has(ev.category));
 son.filter((ev) => ev.magnitude >= (Number($('#minmag').value) || 0));
 
 // --- connection -----------------------------------------------------------
@@ -87,6 +93,12 @@ son.filter((ev) => ev.magnitude >= (Number($('#minmag').value) || 0));
 function setStatus(state, name) {
   $('#conn').textContent = name ? `${name}: ${state}` : state;
 }
+
+// The ingest feed needs a server of its own; the others do not. Show its URL
+// field only when it is selected, so a static deployment stays self-evident.
+$('#source').addEventListener('change', () => {
+  $('#ingest-row').hidden = $('#source').value !== 'ingest';
+});
 
 function buildSource() {
   const kind = $('#source').value;
@@ -96,7 +108,12 @@ function buildSource() {
   if (kind === 'eventstreams')
     return wikipedia({ langs, backend: 'eventstreams', onStatus: setStatus });
   if (kind === 'wikimon') return wikipedia({ langs, backend: 'wikimon', onStatus: setStatus });
-  if (kind === 'ingest') return ingestSource({ url: '/events', replay: 10, onStatus: setStatus });
+  if (kind === 'ingest')
+    return ingestSource({
+      url: $('#ingest-url').value.trim() || '/events',
+      replay: 10,
+      onStatus: setStatus,
+    });
   return randomSource({ rate: 5 });
 }
 

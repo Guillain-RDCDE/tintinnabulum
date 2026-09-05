@@ -18,7 +18,7 @@ export class Sonifier {
       opts.kit === 'synth'
         ? synthKit()
         : opts.kit === 'hatnote' || opts.kit == null
-        ? hatnoteKit({ baseUrl: opts.sampleBaseUrl || '/sounds/' })
+        ? hatnoteKit(opts.sampleBaseUrl ? { baseUrl: opts.sampleBaseUrl } : {})
         : opts.kit;
 
     this.audio = new AudioSink(this.engine, {
