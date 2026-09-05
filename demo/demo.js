@@ -6,6 +6,7 @@ import {
   PALETTES,
   DEFAULT_PALETTE_NAME,
   swatchOf,
+  KITS,
   SHAPES,
   DEFAULT_SHAPE,
   drawShape,
@@ -109,7 +110,7 @@ function refreshUnlock() {
 // and move to the recorded bells once they have arrived.
 let sampleState = 'pending'; // pending | upgrading | done | chosen
 async function upgradeToSamples() {
-  if (sampleState !== 'pending' || $('#kit').value !== 'hatnote') return;
+  if (sampleState !== 'pending' || currentKit !== 'hatnote') return;
   sampleState = 'upgrading';
   try {
     await son.setKit('hatnote');
@@ -131,7 +132,7 @@ async function upgradeToSamples() {
 
 async function ensureAudio() {
   setAudioStatus('Preparing sound…');
-  if (sampleState === 'pending' && $('#kit').value === 'hatnote') {
+  if (sampleState === 'pending' && currentKit === 'hatnote') {
     await son.setKit('synth'); // instant, so the first event is never silent
   }
   const status = await son.unlock();
@@ -319,11 +320,58 @@ $('#range').oninput = (e) => (son.mapper.range = Number(e.target.value) || 27);
 $('#invert').onchange = (e) => (son.mapper.invert = e.target.checked);
 $('#volume').oninput = (e) => (son.volume = Number(e.target.value) / 100);
 $('#voices').oninput = (e) => (son.pool.maxVoices = Math.max(1, Number(e.target.value) || 16));
-$('#kit').onchange = async (e) => {
-  sampleState = 'chosen'; // an explicit choice must not be overridden later
-  await son.setKit(e.target.value);
-  describe({ ...son.audio.status, running: !son.locked, audible: !son.locked });
-};
+// --- instrument picker ----------------------------------------------------
+// Every kit but the recorded one is pure synthesis: no files, nothing to
+// download, nothing to license, and it works offline.
+
+const kitSel = $('#kit');
+for (const [name, def] of Object.entries(KITS)) {
+  const o = document.createElement('option');
+  o.value = name;
+  o.textContent = def.label + (def.sampled ? ' (recorded)' : '');
+  kitSel.appendChild(o);
+}
+
+let currentKit = KITS[store.get('tintinnabulum:kit')] ? store.get('tintinnabulum:kit') : 'hatnote';
+
+async function selectKit(name, { persist = true, audition = true } = {}) {
+  if (!KITS[name]) return;
+  currentKit = name;
+  kitSel.value = name;
+  $('#kit-note').textContent = KITS[name].note;
+  for (const b of $('#kits-simple').children) {
+    b.setAttribute('aria-pressed', String(b.dataset.kit === name));
+  }
+  if (persist) store.set('tintinnabulum:kit', name);
+  if (persist) sampleState = 'chosen'; // an explicit choice is never overridden
+  await son.setKit(name); // while the engine is locked this only assigns
+  if (son.locked) return;
+  describe({ ...son.audio.status, running: true, audible: true });
+  // Play a few notes so the choice can be heard rather than guessed at.
+  if (audition) {
+    [4, 11, 19].forEach((s, i) =>
+      setTimeout(() => son.emit({ magnitude: 900 * (3 - i), id: 'audition-' + name + i }), i * 170)
+    );
+  }
+}
+
+kitSel.onchange = (e) => selectKit(e.target.value);
+
+for (const [name, def] of Object.entries(KITS)) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'feed';
+  btn.dataset.kit = name;
+  btn.setAttribute('aria-pressed', 'false');
+  btn.innerHTML = '<b></b><span></span>';
+  btn.querySelector('b').textContent = def.label;
+  btn.querySelector('span').textContent = def.sampled ? 'recorded samples' : 'synthesised';
+  btn.addEventListener('click', async () => {
+    await ensureAudio();
+    selectKit(name);
+  });
+  $('#kits-simple').appendChild(btn);
+}
 
 $('#record').onclick = async (ev) => {
   const btn = ev.currentTarget;
@@ -511,6 +559,7 @@ $('#connect').onclick = async () => {
 
 selectFeed(feed, false);
 syncLangs(false);
+selectKit(currentKit, { persist: false, audition: false });
 setRunning(false);
 
 // --- log and stats --------------------------------------------------------

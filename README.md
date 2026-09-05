@@ -51,7 +51,8 @@ in plain language first and in full detail afterwards.
 
 | Setting | Effect |
 |---|---|
-| **Instruments → Synthesis** | The same events played by a synthesiser rather than recorded bells. No audio files are involved. |
+| **Sound → Water** | The same events as drops in a cavity instead of bells. Six of the seven kits are pure synthesis, with no audio files at all. |
+| **Sound → Gongs** | Best paired with a sparse feed such as Earthquakes: long, slow, inharmonic. |
 | **Mapping → Scale → pentatonic** | Notes snap to a five-note scale, and the result sounds composed rather than arbitrary. |
 | **Bitcoin, Coinbase, Earthquakes, Bluesky, GitHub** | Five other live feeds, in the same one-tap list as Wikipedia. Coinbase is the interesting one: buys ring and sells pluck. |
 | **Wikipedia editions** | Pick several at once from the flag grid — four Wikipedias running together are busier, denser and more musical than one. |
@@ -195,27 +196,49 @@ nothing beyond `node:http`.
 Implement `load(ctx)` and `play(ctx, dest, {semitone, velocity})` and you have a
 new instrument.
 
+Seven kits ship, selectable at runtime:
+
+| Kit | Sound |
+|---|---|
+| **Bells** | The recorded celesta and clavichord — the original sound |
+| **Synth bell** | An FM bell and a plucked string, generated |
+| **Water** | Drops in a cavity; the rising pitch is what makes it read as water |
+| **Music box** | Plucked metal tines, bright and short |
+| **Marimba** | Tuned wooden bars, the least tiring over a long session |
+| **Gongs** | Large, slow, deliberately inharmonic. Best with a sparse feed |
+| **Glass** | Long and ringing; turns a busy feed into a wash |
+
+Only the first uses audio files. **The other six are pure synthesis: nothing to
+download, nothing to license, and they work offline.**
+
 - `SampleInstrument` plays recorded banks, resampled through `playbackRate`, so
   pitch is continuous rather than limited to the number of recorded notes.
-- `SynthInstrument` needs no audio files: FM and subtractive presets (`bell`,
-  `glass`, `clang`, `pluck`, `woody`, `blip`, `pad`).
+- `SynthInstrument` needs no audio files. FM and subtractive engines, with a
+  `sweep` parameter that bends the pitch during the attack — that bend is the
+  entire difference between a water drop and a beep.
 
-`hatnoteKit()` and `synthKit()` return ready-made `{add, sub, accent}` sets and
-are interchangeable at runtime. Sample banks resolve relative to the library
-itself, so the project runs from any mount point.
+```js
+son.setKit('water');            // or any name in KITS
+```
+
+`hatnoteKit()`, `synthKit()` and `makeKit(name)` return `{add, sub, accent}`
+sets and are interchangeable at runtime; nothing is swapped in until it can
+actually play. Sample banks resolve relative to the library itself, so the
+project runs from any mount point.
 
 ### Palettes
 
-Thirteen, selectable at runtime and stored as plain data in
+Seventeen, selectable at runtime and stored as plain data in
 [`src/visual/palettes.js`](src/visual/palettes.js):
 
 | | | |
 |---|---|---|
-| **Blueprint** — technical, calmest, the default | **Bronze** — brass and copper | **Aurora** — mint and violet |
-| **Ember** — banked fire | **Ultraviolet** — magenta and cyan | **Nocturne** — slate blue, the original |
-| **Sakura** — blossom on plum | **Nordic** — ice and steel | **Marine** — deep water |
-| **Lacquer** — vermilion and gold on black | **Solar** — daylight on deep navy | **Daylight** — ink on paper, for projectors |
-| **Monochrome** — lightness only | | |
+| **Marine** — deep water, the default | **Blueprint** — technical, calmest | **Nocturne** — slate blue, the original |
+| **Bronze** — brass and copper | **Aurora** — mint and violet | **Ember** — banked fire |
+| **Ultraviolet** — magenta and cyan | **Sakura** — blossom on plum | **Nordic** — ice and steel |
+| **Lacquer** — vermilion and gold on black | **Solar** — daylight on deep navy | **Sunset** — coral, teal and gold |
+| **Neon** — arcade colours on black | **Rust** — weathered iron and sand | **Daylight** — ink on paper |
+| **Papyrus** — a warmer light option | **Monochrome** — lightness only | |
 
 ```js
 new CanvasSink('#canvas', { palette: 'bronze' });

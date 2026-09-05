@@ -23,7 +23,7 @@
 
   #stage { position: relative; }
   /* matches the default palette, so there is no flash before the first paint */
-  canvas { display: block; width: 100%; height: 58vh; background: #0b1f33; touch-action: manipulation; }
+  canvas { display: block; width: 100%; height: 58vh; background: #04141c; touch-action: manipulation; }
   #unlock { position: absolute; inset: 0; display: none; place-items: center; text-align: center;
             background: rgba(28,39,51,.74); color: #fff; cursor: pointer; padding: 1em; }
   #unlock.show { display: grid; }
@@ -167,6 +167,10 @@
       <li>Each mark is one event. Tap it to open the thing that made the sound.</li>
     </ul>
 
+    <p class="section-label">Sound</p>
+    <div class="feed-grid" id="kits-simple"></div>
+    <p class="explain" id="kit-note"></p>
+
     <p class="section-label">Colours</p>
     <div class="palette-grid" id="palettes-simple"></div>
 
@@ -209,12 +213,7 @@
 
       <fieldset>
         <legend>Instruments</legend>
-        <label>Kit
-          <select id="kit">
-            <option value="hatnote">Samples — celesta and clav</option>
-            <option value="synth">Synthesis — FM bell and pluck</option>
-          </select>
-        </label>
+        <label>Kit <select id="kit"></select></label>
         <label>Volume <input type="range" id="volume" min="0" max="100" value="70"></label>
         <label>Max voices <input type="number" id="voices" min="1" max="64" value="16"></label>
         <div class="row" style="margin-top:.6em">

@@ -170,6 +170,9 @@ export class SampleInstrument extends Instrument {
 
 // --- synthesis ------------------------------------------------------------
 
+// `sweep` bends the pitch: the oscillator starts at `sweep` times the target
+// frequency and arrives at it over `sweepTime`. It is what separates a water
+// drop from a beep -- the rising "plink" is entirely in that bend.
 export const SYNTH_PRESETS = {
   // FM with an inharmonic ratio: the classic struck-metal timbre.
   bell: { engine: 'fm', wave: 'sine', ratio: 3.51, index: 320, indexDecay: 0.2, attack: 0.002, decay: 1.8 },
@@ -180,6 +183,31 @@ export const SYNTH_PRESETS = {
   woody: { engine: 'sub', wave: 'square', attack: 0.001, decay: 0.22, cutoff: 1600, cutoffDecay: 0.08, q: 2 },
   blip: { engine: 'sub', wave: 'triangle', attack: 0.001, decay: 0.12, cutoff: 5000, cutoffDecay: 0.06, q: 1 },
   pad: { engine: 'sub', wave: 'sawtooth', attack: 0.6, decay: 3.2, cutoff: 900, cutoffDecay: 2.4, q: 3, detune: 8 },
+
+  // A falling drop rings *upward* as the cavity closes: the pitch rises fast
+  // and the whole thing is over in a fifth of a second.
+  drop: {
+    engine: 'sub', wave: 'sine', attack: 0.001, decay: 0.22,
+    cutoff: 4000, cutoffDecay: 0.1, q: 1, sweep: 0.45, sweepTime: 0.07,
+  },
+  // Deeper, slower, with a longer tail: the same gesture in a bigger space.
+  well: {
+    engine: 'sub', wave: 'sine', attack: 0.002, decay: 0.55,
+    cutoff: 2200, cutoffDecay: 0.2, q: 2, sweep: 0.35, sweepTime: 0.14,
+  },
+  // Struck wood: a short burst through a narrow band, no tail at all.
+  wood: {
+    engine: 'sub', wave: 'triangle', attack: 0.001, decay: 0.13,
+    cutoff: 2600, cutoffDecay: 0.05, q: 9, sweep: 1.6, sweepTime: 0.015,
+  },
+  // Tuned bars: an FM ratio near 4 is what makes a marimba read as wooden
+  // rather than metallic.
+  marimba: { engine: 'fm', wave: 'sine', ratio: 3.98, index: 90, indexDecay: 0.07, attack: 0.002, decay: 0.75 },
+  // Plucked metal tines, bright and short.
+  musicbox: { engine: 'fm', wave: 'sine', ratio: 3.02, index: 210, indexDecay: 0.09, attack: 0.001, decay: 1.1 },
+  kalimba: { engine: 'fm', wave: 'triangle', ratio: 2.03, index: 60, indexDecay: 0.12, attack: 0.002, decay: 0.9 },
+  // Big, slow, and deliberately inharmonic so it never settles on a pitch.
+  gong: { engine: 'fm', wave: 'sine', ratio: 1.73, index: 480, indexDecay: 1.2, attack: 0.01, decay: 4.2 },
 };
 
 export class SynthInstrument extends Instrument {
@@ -208,10 +236,22 @@ export class SynthInstrument extends Instrument {
     const nodes = [];
     const tail = t0 + p.attack + decay + 0.05;
 
+    // Pitch envelope. Starting away from the target and arriving at it is what
+    // turns a beep into a drop or a knock; without it those presets are just
+    // short sine tones.
+    const bend = (param, target) => {
+      if (!p.sweep || p.sweep === 1) {
+        param.value = target;
+        return;
+      }
+      param.setValueAtTime(Math.max(1, target * p.sweep), t0);
+      param.exponentialRampToValueAtTime(Math.max(1, target), t0 + (p.sweepTime || 0.05));
+    };
+
     if (p.engine === 'fm') {
       const car = ctx.createOscillator();
       car.type = p.wave;
-      car.frequency.value = freq;
+      bend(car.frequency, freq);
       const mod = ctx.createOscillator();
       mod.type = 'sine';
       mod.frequency.value = freq * p.ratio;
@@ -225,7 +265,7 @@ export class SynthInstrument extends Instrument {
     } else {
       const osc = ctx.createOscillator();
       osc.type = p.wave;
-      osc.frequency.value = freq;
+      bend(osc.frequency, freq);
       const filt = ctx.createBiquadFilter();
       filt.type = 'lowpass';
       filt.Q.value = p.q;
@@ -236,7 +276,7 @@ export class SynthInstrument extends Instrument {
       if (p.detune) {
         const osc2 = ctx.createOscillator();
         osc2.type = p.wave;
-        osc2.frequency.value = freq;
+        bend(osc2.frequency, freq);
         osc2.detune.value = p.detune;
         osc2.connect(filt);
         nodes.push(osc2);
@@ -300,4 +340,63 @@ export function synthKit(opts = {}) {
       ...opts.accent,
     }),
   };
+}
+
+/** Shorthand for a kit made of three presets. */
+function trio(addP, subP, accentP, o = {}) {
+  return () => ({
+    add: new SynthInstrument({ name: addP, preset: addP, baseFreq: o.baseFreq }),
+    sub: new SynthInstrument({ name: subP, preset: subP, baseFreq: o.baseFreq }),
+    accent: new SynthInstrument({ name: accentP, preset: accentP, baseFreq: 130.81, gain: 0.3 }),
+  });
+}
+
+/**
+ * Named kits for a picker. Every one but `hatnote` is pure synthesis: no audio
+ * files, nothing to download, nothing to license, and it works offline.
+ */
+export const KITS = {
+  hatnote: {
+    label: 'Bells',
+    note: 'The recorded celesta and clavichord. The original sound of the project.',
+    make: () => hatnoteKit(),
+    sampled: true,
+  },
+  synth: {
+    label: 'Synth bell',
+    note: 'An FM bell and a plucked string, generated rather than recorded.',
+    make: () => synthKit(),
+  },
+  water: {
+    label: 'Water',
+    note: 'Drops in a cavity. The rising pitch is what makes it read as water rather than a beep.',
+    make: trio('drop', 'wood', 'well'),
+  },
+  musicbox: {
+    label: 'Music box',
+    note: 'Plucked metal tines, bright and short, with a kalimba underneath.',
+    make: trio('musicbox', 'kalimba', 'glass'),
+  },
+  marimba: {
+    label: 'Marimba',
+    note: 'Tuned wooden bars. Warm, and the least tiring over a long session.',
+    make: trio('marimba', 'wood', 'kalimba'),
+  },
+  gongs: {
+    label: 'Gongs',
+    note: 'Large and slow, deliberately inharmonic. Best with a sparse feed.',
+    make: trio('gong', 'glass', 'gong', { baseFreq: 130.81 }),
+  },
+  glassy: {
+    label: 'Glass',
+    note: 'Long, clear and ringing. Turns a busy feed into a wash.',
+    make: trio('glass', 'blip', 'pad'),
+  },
+};
+
+export const KIT_NAMES = Object.keys(KITS);
+
+/** Build a kit by name; unknown names fall back to synthesis. */
+export function makeKit(name) {
+  return (KITS[name] || KITS.synth).make();
 }

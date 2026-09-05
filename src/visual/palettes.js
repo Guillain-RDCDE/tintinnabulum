@@ -205,6 +205,70 @@ export const PALETTES = {
     },
   },
 
+  sunset: {
+    label: 'Sunset',
+    note: 'Coral, teal and gold on deep indigo. The widest hue spread here.',
+    colors: {
+      background: '#14101f',
+      default: '#ffe8d6',
+      user: '#ffe8d6',
+      anon: '#ff6b6b',
+      bot: '#4ecdc4',
+      alert: '#ffd23f',
+      text: '#fff2e6',
+      banner: 'rgba(255, 107, 107, 0.78)',
+      hud: 'rgba(255, 107, 107, 0.45)',
+    },
+  },
+
+  neon: {
+    label: 'Neon',
+    note: 'Arcade colours on black. Loud, and unmistakable at a glance.',
+    colors: {
+      background: '#05050a',
+      default: '#f2f2f2',
+      user: '#f2f2f2',
+      anon: '#ff2e88',
+      bot: '#00c8e0',
+      alert: '#c6ff00',
+      text: '#fafafa',
+      banner: 'rgba(255, 46, 136, 0.78)',
+      hud: 'rgba(255, 46, 136, 0.45)',
+    },
+  },
+
+  rust: {
+    label: 'Rust',
+    note: 'Weathered iron and sand against deep teal. Warm without being loud.',
+    colors: {
+      background: '#101c1e',
+      default: '#ece5d8',
+      user: '#ece5d8',
+      anon: '#d97742',
+      bot: '#3f8f92',
+      alert: '#f2c14e',
+      text: '#f4efe6',
+      banner: 'rgba(217, 119, 66, 0.78)',
+      hud: 'rgba(217, 119, 66, 0.45)',
+    },
+  },
+
+  papyrus: {
+    label: 'Papyrus',
+    note: 'A second light option, warmer than Daylight. Good on a projector.',
+    colors: {
+      background: '#f2ead8',
+      default: '#1c1a17',
+      user: '#1c1a17',
+      anon: '#2e7d9a',
+      bot: '#b3243c',
+      alert: '#e08a00',
+      text: '#2b2318',
+      banner: 'rgba(61, 52, 40, 0.85)',
+      hud: 'rgba(61, 52, 40, 0.45)',
+    },
+  },
+
   monochrome: {
     label: 'Monochrome',
     note: 'Categories separated by lightness alone, so colour vision is never required.',
@@ -222,7 +286,7 @@ export const PALETTES = {
   },
 };
 
-export const DEFAULT_PALETTE_NAME = 'blueprint';
+export const DEFAULT_PALETTE_NAME = 'marine';
 
 /** Accepts a palette name or a colours object; always returns a full set. */
 export function resolvePalette(nameOrColors) {

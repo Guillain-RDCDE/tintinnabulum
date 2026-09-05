@@ -336,7 +336,15 @@ The original project simply played one file per note and was therefore limited t
 including notes above and below anything that was recorded. `step: 0` marks an
 unpitched bank (the swells), which picks a variation at random instead.
 
-**`SynthInstrument`** needs no files at all. Two engines:
+**`SynthInstrument`** needs no files at all, which is why six of the seven kits
+are free of downloads and of licensing entirely. Two engines, plus a `sweep`
+parameter that bends the pitch during the attack: a falling water drop rings
+*upward* as the cavity closes, and that bend is the whole difference between a
+drop and a beep. The test suite checks it by counting zero crossings early and
+late in the note — a peak measurement alone would pass a sweep that never
+happened.
+
+The engines:
 
 - *FM* (`bell`, `glass`, `clang`) — a sine carrier at the target frequency, a
   modulator at an **inharmonic** ratio such as 3.51, and a modulation index that

@@ -14,6 +14,9 @@ export {
   SYNTH_PRESETS,
   hatnoteKit,
   synthKit,
+  KITS,
+  KIT_NAMES,
+  makeKit,
 } from './audio/instruments.js';
 
 export { CanvasSink, DEFAULT_PALETTE } from './visual/canvas-sink.js';

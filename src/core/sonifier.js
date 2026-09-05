@@ -3,7 +3,7 @@ import { Mapper } from './mapper.js';
 import { VoicePool } from './voices.js';
 import { AudioEngine } from '../audio/engine.js';
 import { AudioSink } from '../audio/audio-sink.js';
-import { hatnoteKit, synthKit } from '../audio/instruments.js';
+import { hatnoteKit, synthKit, makeKit } from '../audio/instruments.js';
 
 // The facade. Sources push in, sinks read out, and the mapper sits in the
 // middle deciding what each magnitude sounds like.
@@ -123,8 +123,7 @@ export class Sonifier {
    * can actually play, so the change is inaudible rather than a gap.
    */
   async setKit(kit) {
-    const built =
-      typeof kit === 'string' ? (kit === 'synth' ? synthKit() : hatnoteKit()) : kit;
+    const built = typeof kit === 'string' ? makeKit(kit) : kit;
     if (this.engine.locked) {
       this.audio.setKit(built); // nothing can sound yet anyway
       return this;

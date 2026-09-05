@@ -206,6 +206,76 @@ ok('coverage is reported honestly', Math.abs(partial.coverage - 18 / 27) < 0.01,
 ok('a missing note is covered by its neighbour and still sounds', partial.peak > 0.01,
    'peak=' + (partial.peak || 0).toFixed(3));
 
+// --- every kit must actually make a sound -------------------------------
+// Rendered offline and measured. A synth preset with one bad parameter is
+// silent, and silence is exactly the failure this project keeps hitting.
+const kitPeaks = await page.evaluate(async () => {
+  const m = await import('../src/audio/instruments.js');
+  const out = {};
+  for (const name of Object.keys(m.KITS)) {
+    const kit = m.KITS[name].make();
+    out[name] = {};
+    for (const role of ['add', 'sub', 'accent']) {
+      const inst = kit[role];
+      if (!inst) continue;
+      const off = new OfflineAudioContext(1, 44100 * 3, 44100);
+      try {
+        if (inst.load) await inst.load(off);
+        const v = inst.play(off, off.destination, { semitone: 9, velocity: 1 });
+        if (!v) {
+          out[name][role] = -1;
+          continue;
+        }
+        const buf = await off.startRendering();
+        const d = buf.getChannelData(0);
+        let peak = 0;
+        for (let i = 0; i < d.length; i++) peak = Math.max(peak, Math.abs(d[i]));
+        out[name][role] = Number(peak.toFixed(3));
+      } catch (e) {
+        out[name][role] = 'ERR ' + e.message;
+      }
+    }
+  }
+  return out;
+});
+const silentRoles = [];
+for (const [kit, roles] of Object.entries(kitPeaks)) {
+  for (const [role, peak] of Object.entries(roles)) {
+    if (typeof peak !== 'number' || peak < 0.01) silentRoles.push(`${kit}.${role}=${peak}`);
+  }
+}
+ok('every kit sounds in every role', silentRoles.length === 0, silentRoles.join(' '));
+ok('there are several kits to choose from', Object.keys(kitPeaks).length >= 6,
+   Object.keys(kitPeaks).join(', '));
+
+// The pitch-swept presets are the new mechanism, so they get their own check:
+// a sweep that fails leaves a flat tone, which still passes a peak test.
+const sweepWorks = await page.evaluate(async () => {
+  const m = await import('../src/audio/instruments.js');
+  const render = async (preset) => {
+    const off = new OfflineAudioContext(1, 44100, 44100);
+    const inst = new m.SynthInstrument({ preset, baseFreq: 440 });
+    inst.play(off, off.destination, { semitone: 0, velocity: 1 });
+    const buf = await off.startRendering();
+    const d = buf.getChannelData(0);
+    // Count zero crossings in the first and last part of the note: a rising
+    // sweep crosses zero more often later than earlier.
+    const cross = (from, to) => {
+      let n = 0;
+      for (let i = from + 1; i < to; i++) if (d[i - 1] < 0 !== d[i] < 0) n++;
+      return n;
+    };
+    return { early: cross(200, 1800), late: cross(2600, 4200) };
+  };
+  return { drop: await render('drop'), bell: await render('bell') };
+});
+ok('the water drop really bends its pitch upward',
+   sweepWorks.drop.late > sweepWorks.drop.early * 1.15,
+   `early=${sweepWorks.drop.early} late=${sweepWorks.drop.late}`);
+ok('a preset without a sweep holds its pitch',
+   Math.abs(sweepWorks.bell.late - sweepWorks.bell.early) < sweepWorks.bell.early * 0.5,
+   `early=${sweepWorks.bell.early} late=${sweepWorks.bell.late}`);
+
 // --- live pipeline: events in, notes and pixels out ---------------------
 const live = await page.evaluate(async () => {
   const son = window.son;
