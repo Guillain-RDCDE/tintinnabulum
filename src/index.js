@@ -29,6 +29,13 @@ export {
   isHollow,
 } from './visual/shapes.js';
 export {
+  SCENES,
+  SCENE_NAMES,
+  DEFAULT_SCENE,
+  registerScene,
+  noise2,
+} from './visual/scenes.js';
+export {
   PALETTES,
   PALETTE_KEYS,
   DEFAULT_PALETTE_NAME,

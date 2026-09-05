@@ -280,9 +280,49 @@ sharing a luminance band. *Monochrome* is the deliberate exception, held to a
 lightness floor instead, since its purpose is to remain readable without colour
 vision.
 
+### Visualisations
+
+A scene decides what a moment of data looks like. Seven ship:
+
+| Scene | What it draws |
+|---|---|
+| **Bloom** | The original: each event opens once and fades, with a shockwave in its own shape |
+| **Constellation** | Events become stars and join to their neighbours; bursts draw themselves as clusters |
+| **Flow field** | Each event releases a mote into a slowly turning noise field, and it draws where it drifts |
+| **Ripples** | Concentric wavefronts that cross and interfere |
+| **Grid** | An ordered grid that each event knocks out of true, settling back over time — after Vera Molnár |
+| **Spiral** | Events laid on a golden-angle spiral in arrival order, so the sequence itself becomes the form |
+| **Skyline** | A scrolling record: one bar per event, height by size |
+
+**Adding one is adding an object** to
+[`src/visual/scenes.js`](src/visual/scenes.js), or registering it from
+outside:
+
+```js
+import { registerScene } from './src/index.js';
+
+registerScene('rain', {
+  label: 'Rain',
+  positional: false,             // marks are not at their event's position
+  init(api)      { api.scene.drops = []; },
+  event(p, api)  { api.scene.drops.push({ x: p.x, y: 0, v: p.r }); },
+  frame(ctx, api) { /* draw with the Canvas 2D context */ },
+});
+```
+
+`api` carries `{ w, h, palette, particles, shape, now, dt, scene }`. Every
+scene reads the same particle model, so lifetimes, hit-testing and the event
+contract stay in one place.
+
+**On p5.js:** it is a friendly wrapper over the Canvas 2D API this already
+uses, so importing it would cost about a megabyte and the offline guarantee
+while buying no capability. What was missing was not a library but this
+extension point.
+
 ### Shapes
 
-Events are not obliged to be circles. Eight marks are available, plus `mixed`,
+Used by the **Bloom** scene, which draws one mark per event. Eight marks are
+available, plus `mixed`,
 which assigns one per event from its identity — so a given article keeps the
 same shape as well as the same place on screen.
 

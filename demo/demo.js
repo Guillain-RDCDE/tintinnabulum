@@ -11,6 +11,8 @@ import {
   SHAPES,
   DEFAULT_SHAPE,
   drawShape,
+  SCENES,
+  DEFAULT_SCENE,
   wikipedia,
   bitcoin,
   coinbase,
@@ -396,6 +398,33 @@ $('#record').onclick = async (ev) => {
 // Look
 // =========================================================================
 
+// Scenes are whole ways of drawing the same events. Shapes only apply to the
+// ones that draw a mark per event, so the shape picker follows the choice.
+function selectScene(name, persist = true) {
+  if (!SCENES[name]) return;
+  canvas.setScene(name);
+  $('#scene-note').textContent = SCENES[name].note;
+  for (const b of $('#scenes').children) b.setAttribute('aria-pressed', String(b.dataset.scene === name));
+  const usesShapes = name === 'bloom';
+  $('#shapes').style.opacity = usesShapes ? '1' : '.4';
+  $('#shapes').style.pointerEvents = usesShapes ? '' : 'none';
+  $('#shapes-label').textContent = usesShapes ? 'Shapes' : 'Shapes — used by Bloom only';
+  if (persist) store.set('t:scene', name);
+}
+
+for (const [name, def] of Object.entries(SCENES)) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'card';
+  btn.dataset.scene = name;
+  btn.setAttribute('aria-pressed', 'false');
+  btn.innerHTML = '<b></b><span></span>';
+  btn.querySelector('b').textContent = def.label;
+  btn.querySelector('span').textContent = def.positional === false ? 'Composed view' : 'One mark per event';
+  btn.addEventListener('click', () => selectScene(name));
+  $('#scenes').appendChild(btn);
+}
+
 const paletteGrid = $('#palettes');
 function selectPalette(name, persist = true) {
   canvas.setPalette(name);
@@ -524,6 +553,7 @@ syncLangs(false);
 selectKit(currentKit, { persist: false, audition: false });
 selectPalette(canvas.paletteName, false);
 selectShape(SHAPE_CHOICES.includes(store.get('t:shape')) ? store.get('t:shape') : DEFAULT_SHAPE, false);
+selectScene(SCENES[store.get('t:scene')] ? store.get('t:scene') : DEFAULT_SCENE, false);
 $('#starfield').checked = store.get('t:starfield') === '1';
 canvas.setStarfield($('#starfield').checked);
 setRunning(false);

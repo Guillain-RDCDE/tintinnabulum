@@ -466,6 +466,89 @@ ok('the hollow ring differs from both', sigRing !== sigCircle && sigRing !== sig
 ok('the sink reports the shape in use',
    (await page.evaluate(() => window.son.sinks.find((s) => s.particles).shape)) === 'ring');
 
+// --- scenes --------------------------------------------------------------
+// Every scene must actually draw. A scene that throws, or quietly paints
+// nothing, would leave a blank canvas while the audio carried on -- the visual
+// twin of the silent-audio bug this project keeps running into.
+const sceneNames = await page.evaluate(async () => {
+  const m = await import('../src/visual/scenes.js');
+  return m.SCENE_NAMES;
+});
+ok('several visualisations are available', sceneNames.length >= 6, sceneNames.join(', '));
+ok('every scene is offered in the picker',
+   (await page.locator('#scenes .card').count()) === sceneNames.length,
+   (await page.locator('#scenes .card').count()) + ' cards');
+
+const sceneErrors = [];
+const blank = [];
+const inkOf = () =>
+  page.evaluate(() => {
+    const c = document.querySelector('#canvas');
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    const bg = [d[0], d[1], d[2]];
+    let ink = 0;
+    for (let i = 0; i < d.length; i += 4 * 29) {
+      if (Math.abs(d[i] - bg[0]) + Math.abs(d[i + 1] - bg[1]) + Math.abs(d[i + 2] - bg[2]) > 24) ink++;
+    }
+    return ink;
+  });
+
+for (const name of sceneNames) {
+  const before = consoleErrors.length;
+  await page.evaluate((n) => {
+    const sink = window.son.sinks.find((s) => s.particles);
+    sink.clear();
+    sink.setScene(n);
+    for (let i = 0; i < 45; i++) {
+      window.son.emit({ magnitude: Math.round(Math.exp(Math.random() * 9)), id: `scene-${n}-${i}` });
+    }
+  }, name);
+  // Several frames: the moving scenes need time to travel before they mark.
+  await page.waitForTimeout(450);
+  const ink = await inkOf();
+  if (ink < 8) blank.push(`${name}(${ink})`);
+  if (consoleErrors.length > before) sceneErrors.push(name);
+}
+ok('every scene paints something', blank.length === 0, blank.join(' ') || 'all drew');
+ok('no scene throws while drawing', sceneErrors.length === 0, sceneErrors.join(' '));
+
+// Scenes size their own structures to the canvas, so a resize must not break
+// them: the grid allocates arrays from the dimensions.
+await page.evaluate(() => {
+  const sink = window.son.sinks.find((s) => s.particles);
+  sink.setScene('grid');
+  for (let i = 0; i < 20; i++) window.son.emit({ magnitude: 500, id: 'grid-' + i });
+});
+await page.setViewportSize({ width: 700, height: 620 });
+await page.waitForTimeout(300);
+await page.evaluate(() => {
+  for (let i = 0; i < 20; i++) window.son.emit({ magnitude: 900, id: 'grid-after-' + i });
+});
+await page.waitForTimeout(300);
+ok('a scene survives the canvas being resized under it', (await inkOf()) > 8);
+await page.setViewportSize({ width: 1280, height: 900 });
+await page.waitForTimeout(200);
+
+// The extension point is the point: adding a visualisation must be adding one
+// object, with no change to the engine.
+const custom = await page.evaluate(async () => {
+  const m = await import('../src/visual/scenes.js');
+  m.registerScene('test-only', {
+    label: 'Test',
+    frame(ctx, api) {
+      ctx.fillStyle = api.palette.alert;
+      ctx.fillRect(10, 10, api.w - 20, api.h - 20);
+    },
+  });
+  const sink = window.son.sinks.find((s) => s.particles);
+  sink.setScene('test-only');
+  return sink.sceneName;
+});
+ok('a scene can be registered from outside the library', custom === 'test-only', String(custom));
+await page.waitForTimeout(200);
+ok('the registered scene really draws', (await inkOf()) > 50);
+await page.evaluate(() => window.son.sinks.find((s) => s.particles).setScene('bloom'));
+
 // --- starry sky ----------------------------------------------------------
 const emptyGround = async () =>
   page.evaluate(async () => {

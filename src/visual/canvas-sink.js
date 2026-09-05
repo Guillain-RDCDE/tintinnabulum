@@ -1,6 +1,7 @@
 import { rngFrom } from '../core/event.js';
 import { PALETTES, DEFAULT_PALETTE_NAME, resolvePalette } from './palettes.js';
-import { SHAPES, SHAPE_NAMES, DEFAULT_SHAPE, drawShape, isHollow } from './shapes.js';
+import { SHAPES, DEFAULT_SHAPE } from './shapes.js';
+import { SCENES, DEFAULT_SCENE } from './scenes.js';
 
 // Canvas 2D rewrite of the original D3 v3 visuals.
 //
@@ -11,6 +12,7 @@ import { SHAPES, SHAPE_NAMES, DEFAULT_SHAPE, drawShape, isHollow } from './shape
 
 export { PALETTES, DEFAULT_PALETTE_NAME, resolvePalette } from './palettes.js';
 export { SHAPES, SHAPE_NAMES, DEFAULT_SHAPE } from './shapes.js';
+export { SCENES, SCENE_NAMES, DEFAULT_SCENE, registerScene } from './scenes.js';
 
 /** The default colours, kept as a named export for convenience. */
 export const DEFAULT_PALETTE = resolvePalette(DEFAULT_PALETTE_NAME);
@@ -44,6 +46,10 @@ export class CanvasSink {
     this.starfield = Boolean(opts.starfield);
     this.starCount = opts.starCount ?? 140;
     this._stars = null;
+
+    this.sceneName = SCENES[opts.scene] ? opts.scene : DEFAULT_SCENE;
+    this._scene = {}; // scratch space owned by the active scene
+    this._lastFrame = 0;
 
     this.particles = [];
     this.banners = [];
@@ -97,6 +103,8 @@ export class CanvasSink {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     // Keep existing particles where their id says they belong.
     for (const p of this.particles) this._place(p);
+    this._stars = null; // rebuilt against the new size
+    this._initScene(); // scenes size their own structures to the canvas
   }
 
   _place(p) {
@@ -114,6 +122,44 @@ export class CanvasSink {
    * the category they were born with, so a change takes effect immediately
    * instead of waiting for the canvas to turn over.
    */
+  /** The surface handed to the active scene each frame. */
+  _sceneApi(now = 0) {
+    return {
+      w: this.w,
+      h: this.h,
+      palette: this.palette,
+      particles: this.particles,
+      shape: this.shape,
+      ringLife: this.ringLife,
+      now,
+      dt: this._dt || 16,
+      scene: this._scene,
+    };
+  }
+
+  _initScene() {
+    this._scene = {};
+    const scene = SCENES[this.sceneName];
+    if (scene && scene.init) {
+      try {
+        scene.init(this._sceneApi(this._lastFrame));
+      } catch (e) {
+        console.error('scene "' + this.sceneName + '" failed to start', e);
+      }
+    }
+  }
+
+  /**
+   * Switch visualisation at runtime. Scenes share the event model and only
+   * decide what a moment of data looks like, so nothing else changes.
+   */
+  setScene(name) {
+    if (!SCENES[name]) return this;
+    this.sceneName = name;
+    this._initScene();
+    return this;
+  }
+
   /** Switch the mark shape at runtime. 'mixed' varies it per event id. */
   setShape(name) {
     if (SHAPES[name] || name === 'mixed') this.shape = name;
@@ -185,6 +231,15 @@ export class CanvasSink {
       this.particles.splice(0, this.particles.length - this.maxParticles);
     }
 
+    const scene = SCENES[this.sceneName];
+    if (scene && scene.event) {
+      try {
+        scene.event(p, this._sceneApi(now));
+      } catch (e) {
+        console.error('scene "' + this.sceneName + '" failed on an event', e);
+      }
+    }
+
     if (ev.accent && !ev.dimmed) {
       this.banners.push({ born: now, text: ev.label || 'New event', url: ev.url || '' });
     }
@@ -196,6 +251,10 @@ export class CanvasSink {
   }
 
   hitTest(x, y) {
+    // Scenes that do not draw marks at their particle's position cannot be
+    // meaningfully clicked: the thing under the cursor is not that event.
+    const scene = SCENES[this.sceneName];
+    if (scene && scene.positional === false) return null;
     // Topmost (most recent) first.
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
@@ -221,6 +280,10 @@ export class CanvasSink {
   _frame(now) {
     if (!this._running) return;
     const ctx = this.ctx;
+    // Capture the gap before advancing the clock: the scenes integrate motion
+    // against it, and a zero dt freezes everything that moves.
+    this._dt = this._lastFrame ? Math.min(100, now - this._lastFrame) : 16;
+    this._lastFrame = now;
 
     ctx.fillStyle = this.palette.background;
     ctx.fillRect(0, 0, this.w, this.h);
@@ -249,36 +312,32 @@ export class CanvasSink {
       ctx.globalAlpha = 1;
     }
 
+    // Lifetimes are managed here, not in the scenes: every scene shares one
+    // event model, and only decides what a moment of data looks like.
     for (let i = this.particles.length - 1; i >= 0; i--) {
-      const p = this.particles[i];
-      const age = now - p.born;
-      if (age >= p.life) {
-        this.particles.splice(i, 1);
-        continue;
-      }
-      const fade = 1 - age / p.life;
+      if (now - this.particles[i].born >= this.particles[i].life) this.particles.splice(i, 1);
+    }
 
-      // Shockwave, in the same shape as the mark it came from.
-      if (p.ring && age < this.ringLife) {
-        const t = Math.sqrt(age / this.ringLife); // ease-out
-        ctx.globalAlpha = (1 - t) * 0.35;
-        ctx.strokeStyle = p.color;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        drawShape(ctx, this.shape, p.x, p.y, p.r + 20 + t * 20, p.rot, p.pick);
-        ctx.stroke();
-      }
+    const scene = SCENES[this.sceneName] || SCENES[DEFAULT_SCENE];
+    const api = this._sceneApi(now);
+    ctx.save();
+    try {
+      scene.frame(ctx, api);
+    } catch (e) {
+      console.error('scene "' + this.sceneName + '" failed', e);
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
 
-      ctx.globalAlpha = p.alpha0 * fade;
-      ctx.fillStyle = p.color;
-      ctx.beginPath();
-      drawShape(ctx, this.shape, p.x, p.y, p.r, p.rot, p.pick);
-      ctx.fill(isHollow(this.shape) ? 'evenodd' : 'nonzero');
-
-      const hovered = this._hover === p;
-      if (p.label && (hovered || (this.showLabels && age < this.labelLife && p.ring))) {
-        const a = hovered ? 1 : Math.min(1, 2 - (age / this.labelLife) * 2);
-        if (a > 0) this._label(p.x, p.y - p.r - 6, p.label, a);
+    // Labels only where the marks actually sit at their particle's position.
+    if (scene.positional !== false) {
+      for (const p of this.particles) {
+        const age = now - p.born;
+        const hovered = this._hover === p;
+        if (p.label && (hovered || (this.showLabels && age < this.labelLife && p.ring))) {
+          const a = hovered ? 1 : Math.min(1, 2 - (age / this.labelLife) * 2);
+          if (a > 0) this._label(p.x, p.y - p.r - 6, p.label, a);
+        }
       }
     }
 
