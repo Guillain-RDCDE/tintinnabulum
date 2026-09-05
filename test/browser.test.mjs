@@ -104,21 +104,52 @@ const openMore = async (sel) => {
   }, sel);
 };
 
-for (const sec of ['#sec-listen', '#sec-sound', '#sec-look', '#sec-filter', '#sec-activity']) {
+const PANELS = ['#sec-listen', '#sec-sound', '#sec-look', '#sec-filter', '#sec-activity'];
+for (const sec of PANELS) {
   ok(`${sec.replace('#sec-', '')} is on the page from the start`,
      await page.locator(sec).isVisible());
 }
 ok('there is a single obvious start button', await page.locator('#start').isVisible());
-ok('the essentials need no digging',
-   (await page.locator('#feeds .card').count()) >= 6 &&
-   (await page.locator('#kits .card').count()) >= 6 &&
-   (await page.locator('#palettes .sw').count()) >= 8);
+
+// The page opens as five folded rows and one button, so it stays short no
+// matter how many feeds, kits, palettes and scenes exist behind them.
+const folded = await page.evaluate((sels) =>
+  sels.map((s) => ({ id: s, open: document.querySelector(s).open })), PANELS);
+ok('every panel starts folded', folded.every((p) => !p.open), folded.filter((p) => p.open).map((p) => p.id).join(', '));
+
+const panelHeight = await page.evaluate(() => document.querySelector('main').getBoundingClientRect().height);
+ok('the folded page is short', panelHeight < 600, Math.round(panelHeight) + 'px of settings');
+
+// Each header states its own value, so the whole configuration reads at a glance.
+const summaries = await page.evaluate(() =>
+  ['listen', 'sound', 'look', 'filter'].map((k) => document.querySelector('#sum-' + k).textContent.trim()));
+ok('each folded panel shows its current setting', summaries.every((s) => s.length > 0), summaries.join(' | '));
+
+// The start button is the one action, and it is centred rather than pushed aside.
+const centring = await page.evaluate(() => {
+  const b = document.querySelector('#start').getBoundingClientRect();
+  const m = document.querySelector('main').getBoundingClientRect();
+  return Math.abs((b.left + b.right) / 2 - (m.left + m.right) / 2);
+});
+ok('the start button is centred', centring < 2, 'off centre by ' + centring.toFixed(1) + 'px');
 
 const disclosures = await page.evaluate(() =>
   [...document.querySelectorAll('details.more')].map((d) => ({ id: d.id, open: d.open }))
 );
-ok('advanced options exist but stay folded away', disclosures.length >= 4 && disclosures.every((d) => !d.open),
+ok('advanced options exist but stay folded away', disclosures.length >= 3 && disclosures.every((d) => !d.open),
    disclosures.map((d) => d.id).join(', '));
+
+// Everything below drives the controls, which means opening the panels.
+const openPanels = async (p = page) => {
+  await p.evaluate(() => {
+    for (const d of document.querySelectorAll('details.panel')) d.open = true;
+  });
+};
+await openPanels();
+ok('a panel opens to reveal its controls',
+   (await page.locator('#feeds .card').count()) >= 6 &&
+   (await page.locator('#kits .card').count()) >= 6 &&
+   (await page.locator('#palettes .sw').count()) >= 8);
 
 // The duplication that made the old interface confusing must not come back.
 const dupes = await page.evaluate(() => {
@@ -396,6 +427,8 @@ const restored = await page.evaluate(
   () => window.son.sinks.find((s) => s.particles).paletteName
 );
 ok('the palette choice survives a reload', restored === 'bronze', restored);
+// The reload folded the panels again, as a fresh visit should.
+await openPanels();
 
 // The reload left a fresh, suspended AudioContext. Without this the recorder
 // check below would capture silence and still pass on size alone.

@@ -525,9 +525,29 @@ son.filter((ev) => ev.magnitude >= (Number($('#minmag').value) || 0));
 // Activity and startup
 // =========================================================================
 
+// Each panel header carries its own current value, so the whole configuration
+// can be read at a glance without opening anything.
+function updateSummaries() {
+  const cats = [...$('#cats').selectedOptions].map((o) => o.value);
+  const minmag = Number($('#minmag').value) || 0;
+  const langNames = langs
+    .map((c) => (WIKIPEDIA_LANGUAGES.find((l) => l.code === c) || {}).native || c)
+    .slice(0, 3)
+    .join(', ');
+  $('#sum-listen').textContent =
+    FEEDS[feed].label + (FEEDS[feed].langs ? ` · ${langNames}${langs.length > 3 ? '…' : ''}` : '');
+  $('#sum-sound').textContent =
+    KITS[currentKit].label + (son.audio.tempo.bpm ? ` · ${son.audio.tempo.bpm} bpm` : '');
+  $('#sum-look').textContent =
+    `${SCENES[canvas.sceneName].label} · ${PALETTES[canvas.paletteName].label}`;
+  $('#sum-filter').textContent =
+    (cats.length === 4 ? 'Everything' : cats.join(', ') || 'Nothing') +
+    (minmag > 0 ? ` · above ${minmag}` : '');
+}
+
 const log = $('#log');
 son.on((ev) => {
-  if (ev.dimmed || !$('#more-activity').open) return;
+  if (ev.dimmed || !$('#sec-activity').open) return;
   const li = document.createElement('li');
   const verb = ev.polarity > 0 ? `+${ev.magnitude}` : ev.polarity < 0 ? `−${ev.magnitude}` : `${ev.magnitude}`;
   li.textContent = `${verb}  ${ev.label || ev.id}  ${ev.source ? '(' + ev.source + ')' : ''}`;
@@ -539,7 +559,9 @@ setInterval(() => {
   if (son.stats.received) {
     $('#stat').textContent =
       `${son.eventsPerMinute}/min · ${son.audio.stats.played} played · ${son.pool.active} voices`;
+    $('#sum-activity').textContent = `${son.eventsPerMinute} events per minute`;
   }
+  updateSummaries();
   if (son.engine.locked && son.stats.received > 0) {
     setAudioStatus('Sound is suspended by the browser. Tap anywhere to resume it.', 'bad');
     refreshUnlock();
@@ -554,6 +576,9 @@ selectKit(currentKit, { persist: false, audition: false });
 selectPalette(canvas.paletteName, false);
 selectShape(SHAPE_CHOICES.includes(store.get('t:shape')) ? store.get('t:shape') : DEFAULT_SHAPE, false);
 selectScene(SCENES[store.get('t:scene')] ? store.get('t:scene') : DEFAULT_SCENE, false);
+$('#cats').addEventListener('change', updateSummaries);
+$('#minmag').addEventListener('input', updateSummaries);
+updateSummaries();
 $('#starfield').checked = store.get('t:starfield') === '1';
 canvas.setStarfield($('#starfield').checked);
 setRunning(false);

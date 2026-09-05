@@ -635,6 +635,164 @@ export const SCENES = {
       }
     },
   },
+  pile: {
+    label: 'Pile',
+    positional: false,
+    note: 'Events fall, bounce and settle into a heap, so the sheer volume of what has happened becomes visible.',
+    init(api) {
+      api.scene.bits = [];
+    },
+    event(p, api) {
+      api.scene.bits.push({
+        x: p.x,
+        y: -8,
+        vx: (Math.random() - 0.5) * 40,
+        vy: 0,
+        r: Math.max(2.5, p.r * 0.16),
+        color: p.color,
+        rest: false,
+      });
+      if (api.scene.bits.length > 600) api.scene.bits.shift();
+    },
+    frame(ctx, api) {
+      const s = api.scene;
+      if (!s.bits) return;
+      const step = Math.min(0.04, api.dt / 1000);
+      const floor = api.h - 6;
+      for (const b of s.bits) {
+        if (!b.rest) {
+          b.vy += 1500 * step;
+          b.x += b.vx * step;
+          b.y += b.vy * step;
+          if (b.x < b.r || b.x > api.w - b.r) b.vx *= -0.6;
+          if (b.y >= floor - b.r) {
+            b.y = floor - b.r;
+            b.vy *= -0.32;
+            b.vx *= 0.7;
+            // Once it has stopped bouncing, freeze it: a settled heap should
+            // stay put rather than jitter for ever.
+            if (Math.abs(b.vy) < 26) b.rest = true;
+          }
+        }
+        ctx.globalAlpha = 0.9;
+        ctx.fillStyle = b.color;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.r, 0, TAU);
+        ctx.fill();
+      }
+    },
+  },
+
+  threads: {
+    label: 'Threads',
+    positional: false,
+    note: 'Level threads pushed aside by each event, weaving a fabric out of where things happened.',
+    init(api) {
+      const rows = Math.max(6, Math.floor(api.h / 26));
+      const cols = Math.max(30, Math.floor(api.w / 8));
+      api.scene.rows = rows;
+      api.scene.cols = cols;
+      api.scene.off = Array.from({ length: rows }, () => new Float32Array(cols));
+      api.scene.tint = new Array(rows).fill(null);
+    },
+    event(p, api) {
+      const s = api.scene;
+      if (!s.off) return;
+      const row = Math.min(s.rows - 1, Math.max(0, Math.floor((p.y / api.h) * s.rows)));
+      const at = Math.min(s.cols - 1, Math.max(0, Math.floor((p.x / api.w) * s.cols)));
+      const push = Math.min(api.h / s.rows, p.r * 0.5) * (Math.random() < 0.5 ? -1 : 1);
+      const width = 6;
+      for (let d = -width; d <= width; d++) {
+        const i = at + d;
+        if (i < 0 || i >= s.cols) continue;
+        // A raised cosine, so the thread bends rather than kinks.
+        s.off[row][i] += push * 0.5 * (1 + Math.cos((Math.PI * d) / width));
+      }
+      s.tint[row] = p.color;
+    },
+    frame(ctx, api) {
+      const s = api.scene;
+      if (!s.off) return;
+      const relax = 1 - Math.min(0.4, (api.dt / 1000) * 0.25);
+      const gap = api.h / (s.rows + 1);
+      const step = api.w / (s.cols - 1);
+      ctx.lineWidth = 1.6;
+      for (let r = 0; r < s.rows; r++) {
+        const y0 = gap * (r + 1);
+        const line = s.off[r];
+        ctx.globalAlpha = 0.75;
+        ctx.strokeStyle = s.tint[r] || api.palette.default;
+        ctx.beginPath();
+        for (let i = 0; i < s.cols; i++) {
+          line[i] *= relax;
+          const x = i * step;
+          const y = y0 + line[i];
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+    },
+  },
+
+  lissajous: {
+    label: 'Lissajous',
+    positional: false,
+    note: 'Each event draws a figure whose two frequencies come from its size, so every value has its own curve.',
+    frame(ctx, api) {
+      const cx = api.w / 2;
+      const cy = api.h / 2;
+      const A = api.w * 0.4;
+      const B = api.h * 0.4;
+      ctx.lineWidth = 1.4;
+      for (const p of api.particles) {
+        const age = (api.now - p.born) / 1000;
+        const fade = 1 - (api.now - p.born) / p.life;
+        // Small integer ratios close on themselves; the size picks the pair.
+        const a = 1 + Math.floor(p.pick * 4);
+        const b = 1 + Math.floor((p.r / 90) * 5);
+        const phase = p.rot;
+        const span = Math.min(TAU, age * 2.2);
+        ctx.globalAlpha = fade * 0.55;
+        ctx.strokeStyle = p.color;
+        ctx.beginPath();
+        for (let t = 0; t <= span; t += 0.06) {
+          const x = cx + Math.sin(a * t + phase) * A * (0.3 + (p.r / 90) * 0.7);
+          const y = cy + Math.sin(b * t) * B * (0.3 + (p.r / 90) * 0.7);
+          if (t === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+    },
+  },
+
+  nebula: {
+    label: 'Nebula',
+    positional: false,
+    note: 'Soft glows added on top of one another, so busy moments burn bright and quiet ones stay dim.',
+    frame(ctx, api) {
+      // Additive blending: overlapping events accumulate rather than occlude,
+      // which is what makes density read as brightness.
+      ctx.globalCompositeOperation = 'lighter';
+      for (const p of api.particles) {
+        const age = api.now - p.born;
+        const fade = 1 - age / p.life;
+        const rad = Math.max(18, p.r * 1.8) * (0.6 + (1 - fade) * 0.8);
+        const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, rad);
+        g.addColorStop(0, p.color);
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        // Additive light accumulates fast: a modest per-glow alpha keeps
+        // individual events legible instead of merging into one wash.
+        ctx.globalAlpha = fade * 0.2;
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, rad, 0, TAU);
+        ctx.fill();
+      }
+      ctx.globalCompositeOperation = 'source-over';
+    },
+  },
 };
 
 export const SCENE_NAMES = Object.keys(SCENES);

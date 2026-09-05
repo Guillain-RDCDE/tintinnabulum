@@ -282,7 +282,18 @@ vision.
 
 ### Visualisations
 
-A scene decides what a moment of data looks like. Thirteen ship:
+A scene decides what a moment of data looks like. Seventeen ship — the four
+below join Bloom, Constellation, Flow field, Ripples, Grid, Truchet, Orbits,
+Rain, Radar, Spiral, Tree rings, Terrain and Skyline:
+
+| Scene | What it draws |
+|---|---|
+| **Pile** | Events fall, bounce and settle into a heap, so sheer volume becomes visible |
+| **Threads** | Level threads pushed aside by each event, weaving a fabric |
+| **Lissajous** | Each event draws a figure whose two frequencies come from its size |
+| **Nebula** | Soft glows added on top of one another, so busy moments burn bright |
+
+The full set:
 
 | Scene | What it draws |
 |---|---|
