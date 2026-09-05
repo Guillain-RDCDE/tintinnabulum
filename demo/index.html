@@ -2,138 +2,208 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Tintinnabulum — sandbox</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%231c2733'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%23b17ae0'/%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='%23b17ae0' stroke-opacity='.5' stroke-width='1.5'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%231c2733'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%23e8b44a'/%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='%23e8b44a' stroke-opacity='.5' stroke-width='1.5'/%3E%3C/svg%3E">
 <style>
   :root {
-    --bg: #f8f8f8; --fg: #1c2733; --line: #dde3e8; --accent: #306596; --warn: #cc4731;
+    --bg: #f6f6f4; --fg: #1c2733; --line: #dde3e8; --accent: #9a6b12; --warn: #b3401f;
+    --muted: #6b7a88;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; font: 14px/1.5 system-ui, sans-serif; background: var(--bg); color: var(--fg); }
-  header { display: flex; align-items: center; gap: 1em; padding: .6em 1em; flex-wrap: wrap; }
-  h1 { font-size: 1.2em; margin: 0; }
-  #stage { position: relative; }
-  canvas { display: block; width: 100%; height: 62vh; background: #1c2733; }
-  #unlock {
-    position: absolute; inset: 0; display: none; place-items: center;
-    background: rgba(28,39,51,.72); color: #fff; cursor: pointer;
-    font-size: 1.4em; letter-spacing: .02em;
-  }
-  #unlock.show { display: grid; }
-  #unlock span { animation: pulse 2s ease-in-out infinite; }
-  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .45 } }
-  .panel { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: .8em 1.2em; padding: 1em; max-width: 1200px; }
-  fieldset { border: 1px solid var(--line); border-radius: 4px; padding: .6em .8em .8em; margin: 0; background: #fff; }
-  legend { font-weight: 600; font-size: .85em; text-transform: uppercase; letter-spacing: .06em; color: #6b7a88; padding: 0 .3em; }
-  label { display: block; font-size: .9em; margin-top: .4em; }
-  select, input[type=text], input[type=number] { width: 100%; padding: .3em; font: inherit; border: 1px solid var(--line); border-radius: 3px; }
-  input[type=range] { width: 100%; }
-  button { font: inherit; padding: .4em .8em; border: 1px solid var(--line); background: #fff; border-radius: 3px; cursor: pointer; }
-  button:hover { border-color: var(--accent); color: var(--accent); }
-  button.rec { color: var(--warn); border-color: var(--warn); }
-  .row { display: flex; gap: .5em; align-items: center; }
-  #log { max-width: 1200px; margin: 0 1em 3em; padding: 0; list-style: none; font-size: .85em; border: 1px solid var(--line); background: #fff; border-radius: 4px; max-height: 220px; overflow: hidden; }
-  #log li { padding: .25em .6em; border-bottom: 1px solid #f0f3f5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .cat-bot { color: #9b59b6 } .cat-anon { color: #27ae60 } .cat-alert { color: #d35400 }
-  .stat { font-variant-numeric: tabular-nums; color: #6b7a88; font-size: .85em; }
+  html, body { margin: 0; }
+  body { font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--fg); }
 
-  /* palette picker */
-  .palette-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(74px, 1fr)); gap: .5em; margin-top: .5em; }
-  .pal { border: 2px solid transparent; border-radius: 7px; padding: 0; background: none; cursor: pointer; transition: transform .12s ease, border-color .12s ease; }
+  header { display: flex; align-items: baseline; gap: .8em; padding: .7em 1em; flex-wrap: wrap; }
+  h1 { font-size: 1.15rem; margin: 0; letter-spacing: .01em; }
+  header .tag { color: var(--muted); font-size: .88rem; }
+
+  #stage { position: relative; }
+  canvas { display: block; width: 100%; height: 58vh; background: #1c2733; touch-action: manipulation; }
+  #unlock { position: absolute; inset: 0; display: none; place-items: center; text-align: center;
+            background: rgba(28,39,51,.74); color: #fff; cursor: pointer; padding: 1em; }
+  #unlock.show { display: grid; }
+  #unlock span { font-size: 1.25rem; animation: pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .45 } }
+
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 1em; }
+
+  /* ---- simple mode ---- */
+  #simple .primary {
+    display: block; width: 100%; padding: .85em 1em; font: 600 1.05rem/1.2 inherit;
+    color: #fff; background: #1c2733; border: none; border-radius: 8px; cursor: pointer;
+    min-height: 52px;
+  }
+  #simple .primary:hover { background: #2a3a4b; }
+  #simple .primary[data-on="true"] { background: var(--warn); }
+  #audio-status { display: block; margin-top: .6em; font-size: .9rem; color: var(--muted); min-height: 1.4em; }
+  #audio-status[data-state="bad"] { color: var(--warn); }
+  #audio-status[data-state="good"] { color: #2f7d32; }
+  .explain { margin: 1.1em 0 0; color: var(--fg); }
+  .explain li { margin: .3em 0; }
+  .section-label { font-size: .78rem; text-transform: uppercase; letter-spacing: .07em;
+                   color: var(--muted); margin: 1.4em 0 .1em; font-weight: 600; }
+
+  /* ---- shared: palette picker ---- */
+  .palette-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: .55em; margin-top: .5em; }
+  .pal { border: 2px solid transparent; border-radius: 8px; padding: 0; background: none; cursor: pointer;
+         transition: transform .12s ease, border-color .12s ease; }
   .pal:hover { transform: translateY(-2px); border-color: #c9d3dc; }
-  .pal .chip { position: relative; display: flex; align-items: center; justify-content: center; gap: 4px; height: 40px; border-radius: 5px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.18); }
+  .pal .chip { position: relative; display: flex; align-items: center; justify-content: center; gap: 4px;
+               height: 42px; border-radius: 6px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.18); }
   .pal .chip i { width: 9px; height: 9px; border-radius: 50%; }
-  .pal small { display: block; margin-top: .25em; font-size: .68rem; color: #6b7a88; text-align: center; letter-spacing: .01em; }
+  .pal small { display: block; margin-top: .25em; font-size: .7rem; color: var(--muted); text-align: center; }
   .pal[aria-pressed="true"] { border-color: var(--accent); }
   .pal[aria-pressed="true"] small { color: var(--accent); font-weight: 600; }
-  .pal[aria-pressed="true"] .chip::after { content: "✓"; position: absolute; right: 4px; bottom: 1px; font-size: .7rem; color: #fff; text-shadow: 0 0 3px rgba(0,0,0,.9); }
-  code { background: #eef1f4; padding: .1em .3em; border-radius: 3px; }
+  .pal[aria-pressed="true"] .chip::after { content: "✓"; position: absolute; right: 5px; bottom: 1px;
+                                           font-size: .72rem; color: #fff; text-shadow: 0 0 3px rgba(0,0,0,.9); }
+
+  .mode-switch { margin-top: 1.6em; }
+  .mode-switch button { font: inherit; padding: .55em .9em; border: 1px solid var(--line);
+                        background: #fff; border-radius: 6px; cursor: pointer; color: var(--fg); min-height: 40px; }
+  .mode-switch button:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ---- advanced mode ---- */
+  .panel { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: .9em 1.2em; }
+  fieldset { border: 1px solid var(--line); border-radius: 6px; padding: .6em .8em .9em; margin: 0; background: #fff; }
+  legend { font-weight: 600; font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 0 .3em; }
+  label { display: block; font-size: .9rem; margin-top: .45em; }
+  select, input[type=text], input[type=number] { width: 100%; padding: .45em; font: inherit;
+    border: 1px solid var(--line); border-radius: 4px; min-height: 40px; background: #fff; color: var(--fg); }
+  input[type=range] { width: 100%; }
+  button.act { font: inherit; padding: .5em .9em; border: 1px solid var(--line); background: #fff;
+               border-radius: 5px; cursor: pointer; min-height: 40px; color: var(--fg); }
+  button.act:hover { border-color: var(--accent); color: var(--accent); }
+  button.act.rec { color: var(--warn); border-color: var(--warn); }
+  .row { display: flex; gap: .5em; align-items: center; flex-wrap: wrap; }
+
+  #log { padding: 0; list-style: none; font-size: .85rem; border: 1px solid var(--line);
+         background: #fff; border-radius: 6px; max-height: 230px; overflow: hidden; margin: 1.2em 0 3em; }
+  #log li { padding: .28em .6em; border-bottom: 1px solid #f0f3f5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stat { font-variant-numeric: tabular-nums; color: var(--muted); font-size: .85rem; }
+
+  @media (max-width: 640px) {
+    canvas { height: 44vh; }
+    .wrap { padding: .9em; }
+    .panel { grid-template-columns: 1fr; }
+    header { padding: .6em .9em; }
+  }
 </style>
 </head>
 <body>
 
 <header>
   <h1>Tintinnabulum</h1>
+  <span class="tag">listen to a live stream of events</span>
   <span class="stat" id="stat"></span>
 </header>
 
 <div id="stage">
   <canvas id="canvas"></canvas>
-  <div id="unlock"><span>Click to enable sound</span></div>
+  <div id="unlock"><span>Tap to enable sound</span></div>
 </div>
 
-<div class="panel">
-  <fieldset>
-    <legend>Source</legend>
-    <label>Feed
-      <select id="source">
-        <option value="eventstreams">Wikipedia — EventStreams (HTTPS)</option>
-        <option value="wikimon">Wikipedia — wikimon (Hatnote)</option>
-        <option value="ingest">Ingest server (/events)</option>
-        <option value="random">Synthetic traffic</option>
-      </select>
-    </label>
-    <label>Languages <input type="text" id="langs" value="en" placeholder="en,fr,de"></label>
-    <label id="ingest-row" hidden>Ingest stream URL
-      <input type="text" id="ingest-url" value="/events" placeholder="http://localhost:8080/events">
-    </label>
-    <div class="row" style="margin-top:.6em">
-      <button id="connect">Connect</button>
-      <span class="stat" id="conn">idle</span>
+<div class="wrap">
+
+  <!-- ================= simple ================= -->
+  <div id="simple">
+    <button id="start" class="primary" type="button" data-on="false">Start listening to Wikipedia</button>
+    <span id="audio-status"></span>
+
+    <ul class="explain">
+      <li>A <strong>bell</strong> means text was added; a <strong>plucked string</strong> means text was removed.</li>
+      <li>A <strong>low note</strong> is a large edit, a <strong>high note</strong> a small one.</li>
+      <li>Each circle is one edit. Tap a circle to open the article.</li>
+    </ul>
+
+    <p class="section-label">Colours</p>
+    <div class="palette-grid" id="palettes-simple"></div>
+
+    <div class="mode-switch">
+      <button id="to-advanced" type="button">Advanced settings</button>
     </div>
-  </fieldset>
+  </div>
 
-  <fieldset>
-    <legend>Instruments</legend>
-    <label>Kit
-      <select id="kit">
-        <option value="hatnote">Samples — celesta &amp; clav</option>
-        <option value="synth">Synthesis — FM bell &amp; pluck</option>
-      </select>
-    </label>
-    <label>Volume <input type="range" id="volume" min="0" max="100" value="70"></label>
-    <label>Max voices <input type="number" id="voices" min="1" max="64" value="16"></label>
-    <div class="row" style="margin-top:.6em">
-      <button id="record">● Record</button>
+  <!-- ================= advanced ================= -->
+  <div id="advanced" hidden>
+    <div class="panel">
+      <fieldset>
+        <legend>Source</legend>
+        <label>Feed
+          <select id="source">
+            <option value="eventstreams">Wikipedia — EventStreams (HTTPS)</option>
+            <option value="wikimon">Wikipedia — wikimon (Hatnote)</option>
+            <option value="ingest">Ingest server (/events)</option>
+            <option value="random">Synthetic traffic</option>
+          </select>
+        </label>
+        <label>Languages <input type="text" id="langs" value="en" placeholder="en,fr,de"></label>
+        <label id="ingest-row" hidden>Ingest stream URL
+          <input type="text" id="ingest-url" value="/events" placeholder="http://localhost:8080/events">
+        </label>
+        <div class="row" style="margin-top:.6em">
+          <button id="connect" class="act" type="button">Connect</button>
+          <span class="stat" id="conn">idle</span>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Instruments</legend>
+        <label>Kit
+          <select id="kit">
+            <option value="hatnote">Samples — celesta and clav</option>
+            <option value="synth">Synthesis — FM bell and pluck</option>
+          </select>
+        </label>
+        <label>Volume <input type="range" id="volume" min="0" max="100" value="70"></label>
+        <label>Max voices <input type="number" id="voices" min="1" max="64" value="16"></label>
+        <div class="row" style="margin-top:.6em">
+          <button id="record" class="act" type="button">Record</button>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Mapping</legend>
+        <label>Mode
+          <select id="mode">
+            <option value="adaptive">Adaptive (self-calibrating)</option>
+            <option value="log">Logarithmic</option>
+            <option value="linear">Linear</option>
+          </select>
+        </label>
+        <label>Scale <select id="scale"></select></label>
+        <label>Range (semitones) <input type="number" id="range" min="6" max="60" value="27"></label>
+        <label class="row" style="gap:.4em"><input type="checkbox" id="invert" checked> Big event = low note</label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Palette</legend>
+        <div class="palette-grid" id="palettes"></div>
+        <small id="palette-note" class="stat" style="display:block;margin-top:.6em;min-height:2.4em"></small>
+      </fieldset>
+
+      <fieldset>
+        <legend>Filter</legend>
+        <label>Only these categories
+          <select id="cats" multiple size="4">
+            <option value="user" selected>user</option>
+            <option value="anon" selected>anon</option>
+            <option value="bot" selected>bot</option>
+            <option value="alert" selected>alert</option>
+          </select>
+        </label>
+        <label>Min magnitude <input type="number" id="minmag" value="0" min="0"></label>
+      </fieldset>
     </div>
-  </fieldset>
 
-  <fieldset>
-    <legend>Mapping</legend>
-    <label>Mode
-      <select id="mode">
-        <option value="adaptive">Adaptive (self-calibrating)</option>
-        <option value="log">Logarithmic</option>
-        <option value="linear">Linear</option>
-      </select>
-    </label>
-    <label>Scale <select id="scale"></select></label>
-    <label>Range (semitones) <input type="number" id="range" min="6" max="60" value="27"></label>
-    <label class="row" style="gap:.4em"><input type="checkbox" id="invert" checked> Big event = low note</label>
-  </fieldset>
+    <div class="mode-switch">
+      <button id="to-simple" type="button">Back to simple view</button>
+    </div>
 
-  <fieldset>
-    <legend>Palette</legend>
-    <div class="palette-grid" id="palettes"></div>
-    <small id="palette-note" class="stat" style="display:block;margin-top:.6em;min-height:2.4em"></small>
-  </fieldset>
+    <ul id="log"></ul>
+  </div>
 
-  <fieldset>
-    <legend>Filter</legend>
-    <label>Only these categories
-      <select id="cats" multiple size="4">
-        <option value="user" selected>user</option>
-        <option value="anon" selected>anon</option>
-        <option value="bot" selected>bot</option>
-        <option value="alert" selected>alert</option>
-      </select>
-    </label>
-    <label>Min magnitude <input type="number" id="minmag" value="0" min="0"></label>
-  </fieldset>
 </div>
-
-<ul id="log"></ul>
 
 <script type="module" src="./demo.js"></script>
 </body>

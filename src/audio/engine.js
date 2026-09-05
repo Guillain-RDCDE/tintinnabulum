@@ -39,12 +39,36 @@ export class AudioEngine {
   /** Must be called from inside a user gesture. Resolves true when audible. */
   async unlock() {
     const ctx = this.ctx;
+
+    // iOS routes Web Audio through the "ambient" session by default, which the
+    // hardware ring/silent switch mutes -- the page looks alive and plays
+    // nothing. Declaring playback intent opts out of that. Safari 16.4+; the
+    // guard keeps every other browser unaffected.
+    try {
+      if (typeof navigator !== 'undefined' && navigator.audioSession) {
+        navigator.audioSession.type = 'playback';
+      }
+    } catch (e) {
+      /* not supported here; nothing is lost */
+    }
+
     if (ctx.state === 'suspended') {
       try {
         await ctx.resume();
       } catch (e) {
         return false;
       }
+    }
+
+    // Mobile browsers suspend the context whenever the tab is backgrounded,
+    // and do not always resume it on return.
+    if (!this._watchingVisibility && typeof document !== 'undefined') {
+      this._watchingVisibility = true;
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && this._ctx && this._ctx.state === 'suspended') {
+          this._ctx.resume().catch(() => {});
+        }
+      });
     }
     // iOS additionally wants a buffer actually started during the gesture.
     try {

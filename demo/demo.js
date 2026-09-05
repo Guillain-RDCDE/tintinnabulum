@@ -13,8 +13,29 @@ import {
 
 const $ = (sel) => document.querySelector(sel);
 
-// No sampleBaseUrl: the kit resolves the banks relative to the library itself,
-// so this page works from a local server, a GitHub Pages subpath, anywhere.
+// Per-viewer conveniences only. Storage can be unavailable (private window,
+// blocked site data) and must never break the page.
+const store = {
+  get(k) {
+    try {
+      return localStorage.getItem(k);
+    } catch {
+      return null;
+    }
+  },
+  set(k, v) {
+    try {
+      localStorage.setItem(k, v);
+    } catch {
+      /* ignore */
+    }
+  },
+};
+
+const storedPalette = PALETTES[store.get('tintinnabulum:palette')]
+  ? store.get('tintinnabulum:palette')
+  : DEFAULT_PALETTE_NAME;
+
 const son = new Sonifier({
   kit: 'hatnote',
   mapping: { mode: 'adaptive', scale: 'chromatic', range: 27, jitter: 0.5 },
@@ -22,40 +43,91 @@ const son = new Sonifier({
   volume: 0.7,
 });
 
-// Remembering the palette is a per-viewer convenience, so storage failing
-// (private window, blocked site data) must never break the page.
-const STORE_KEY = 'tintinnabulum:palette';
-const readStored = () => {
-  try {
-    const v = localStorage.getItem(STORE_KEY);
-    return v && PALETTES[v] ? v : null;
-  } catch {
-    return null;
-  }
-};
-
-const canvas = new CanvasSink('#canvas', {
-  showHud: true,
-  palette: readStored() || DEFAULT_PALETTE_NAME,
-});
+const canvas = new CanvasSink('#canvas', { showHud: true, palette: storedPalette });
 son.use(canvas);
 
 const recorder = new Recorder(son.engine);
 let source = null;
 
-// --- unlock ---------------------------------------------------------------
+// --- simple / advanced ----------------------------------------------------
+
+function setMode(mode, persist = true) {
+  const advanced = mode === 'advanced';
+  $('#advanced').hidden = !advanced;
+  $('#simple').hidden = advanced;
+  if (persist) store.set('tintinnabulum:mode', mode);
+}
+
+$('#to-advanced').onclick = () => setMode('advanced');
+$('#to-simple').onclick = () => setMode('simple');
+setMode(store.get('tintinnabulum:mode') === 'advanced' ? 'advanced' : 'simple', false);
+
+// --- audio status ---------------------------------------------------------
+// The first version of this page failed silently: if the sample bank did not
+// load, circles kept appearing and nothing ever made a sound, with no way for
+// anyone to tell why. Audio state is now always stated plainly.
+
+function setAudioStatus(text, state = '') {
+  const el = $('#audio-status');
+  el.textContent = text;
+  el.dataset.state = state;
+}
+
+function describe(status) {
+  if (!status) return;
+  if (!status.running) {
+    setAudioStatus('Sound is blocked by the browser. Tap anywhere to enable it.', 'bad');
+  } else if (!status.usable) {
+    setAudioStatus('No instrument could be loaded, so there is no sound.', 'bad');
+  } else if (status.fellBackToSynth) {
+    setAudioStatus('Sound on, using synthesis: the recorded bells could not be downloaded.', 'good');
+  } else if (status.problems && status.problems.length) {
+    setAudioStatus('Sound on. Some samples were unavailable and are covered by their neighbours.', 'good');
+  } else {
+    setAudioStatus('Sound on.', 'good');
+  }
+}
 
 const unlockEl = $('#unlock');
 function refreshUnlock() {
   unlockEl.classList.toggle('show', son.locked);
 }
-unlockEl.addEventListener('click', async () => {
-  await son.unlock();
+async function ensureAudio() {
+  setAudioStatus('Preparing sound…');
+  const status = await son.unlock();
+  describe(status);
   refreshUnlock();
-});
+  return status;
+}
+unlockEl.addEventListener('click', ensureAudio);
 refreshUnlock();
 
-// --- controls -------------------------------------------------------------
+// --- the one button that matters -----------------------------------------
+
+const startBtn = $('#start');
+
+function setRunning(on) {
+  startBtn.dataset.on = String(on);
+  startBtn.textContent = on ? 'Stop' : 'Start listening to Wikipedia';
+}
+
+startBtn.onclick = async () => {
+  if (startBtn.dataset.on === 'true') {
+    if (source) son.disconnect(source);
+    source = null;
+    setRunning(false);
+    setStatus('idle');
+    return;
+  }
+  await ensureAudio();
+  if (source) son.disconnect(source);
+  source = wikipedia({ langs: ['en'], backend: 'eventstreams', onStatus: setStatus });
+  son.connect(source);
+  setRunning(true);
+};
+setRunning(false);
+
+// --- controls (advanced) --------------------------------------------------
 
 const scaleSel = $('#scale');
 for (const name of Object.keys(SCALES)) {
@@ -64,45 +136,6 @@ for (const name of Object.keys(SCALES)) {
   scaleSel.appendChild(o);
 }
 scaleSel.value = 'chromatic';
-
-// --- palette picker -------------------------------------------------------
-// Swatches rather than a dropdown: the choice is visual, so the control is too.
-const paletteGrid = $('#palettes');
-const paletteNote = $('#palette-note');
-
-function selectPalette(name, persist = true) {
-  canvas.setPalette(name);
-  canvas.canvas.style.background = PALETTES[name].colors.background;
-  paletteNote.textContent = PALETTES[name].note;
-  for (const b of paletteGrid.children) {
-    b.setAttribute('aria-pressed', String(b.dataset.palette === name));
-  }
-  if (persist) {
-    try {
-      localStorage.setItem(STORE_KEY, name);
-    } catch {
-      /* storage unavailable; the palette still applies for this session */
-    }
-  }
-}
-
-for (const [name, def] of Object.entries(PALETTES)) {
-  const { background, dots } = swatchOf(name);
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'pal';
-  btn.dataset.palette = name;
-  btn.title = def.note;
-  btn.setAttribute('aria-pressed', 'false');
-  btn.innerHTML =
-    `<span class="chip" style="background:${background}">` +
-    dots.map((c) => `<i style="background:${c}"></i>`).join('') +
-    `</span><small>${def.label}</small>`;
-  btn.addEventListener('click', () => selectPalette(name));
-  paletteGrid.appendChild(btn);
-}
-
-selectPalette(canvas.paletteName, false);
 
 scaleSel.onchange = () => son.mapper.setScale(scaleSel.value);
 $('#mode').onchange = (e) => {
@@ -113,7 +146,6 @@ $('#range').oninput = (e) => (son.mapper.range = Number(e.target.value) || 27);
 $('#invert').onchange = (e) => (son.mapper.invert = e.target.checked);
 $('#volume').oninput = (e) => (son.volume = Number(e.target.value) / 100);
 $('#voices').oninput = (e) => (son.pool.maxVoices = Math.max(1, Number(e.target.value) || 16));
-
 $('#kit').onchange = async (e) => {
   await son.setKit(e.target.value);
 };
@@ -121,38 +153,71 @@ $('#kit').onchange = async (e) => {
 $('#record').onclick = async (ev) => {
   const btn = ev.currentTarget;
   if (recorder.recording) {
-    btn.textContent = '● Record';
+    btn.textContent = 'Record';
     btn.classList.remove('rec');
     await recorder.save();
   } else {
-    if (son.locked) await son.unlock();
+    await ensureAudio();
     recorder.start();
-    btn.textContent = '■ Stop & save';
+    btn.textContent = 'Stop and save';
     btn.classList.add('rec');
   }
 };
 
-// Filters: everything that fails is drawn dimmed but stays silent, which is
-// how the original treated non-article edits.
+// Filters. Anything that fails is still drawn, dimmed, but stays silent.
 function activeCategories() {
   return new Set([...$('#cats').selectedOptions].map((o) => o.value));
 }
-
-// The checkboxes only govern the categories they actually list. Anything else
-// -- a category of your own arriving through the ingest server, say "warn" --
-// must stay audible, or feeding in custom data yields silence with no clue why.
+// The checkboxes govern only the categories they list. A category of your own
+// arriving through the ingest server must stay audible, or feeding in custom
+// data yields silence with no clue why.
 const LISTED = new Set([...$('#cats').options].map((o) => o.value));
 son.filter((ev) => !LISTED.has(ev.category) || activeCategories().has(ev.category));
 son.filter((ev) => ev.magnitude >= (Number($('#minmag').value) || 0));
 
-// --- connection -----------------------------------------------------------
+// --- palette picker -------------------------------------------------------
+// Swatches rather than a dropdown: the choice is visual, so the control is too.
+
+const paletteNote = $('#palette-note');
+const grids = [$('#palettes'), $('#palettes-simple')];
+
+function selectPalette(name, persist = true) {
+  canvas.setPalette(name);
+  canvas.canvas.style.background = PALETTES[name].colors.background;
+  paletteNote.textContent = PALETTES[name].note;
+  for (const grid of grids) {
+    for (const b of grid.children) {
+      b.setAttribute('aria-pressed', String(b.dataset.palette === name));
+    }
+  }
+  if (persist) store.set('tintinnabulum:palette', name);
+}
+
+for (const grid of grids) {
+  for (const [name, def] of Object.entries(PALETTES)) {
+    const { background, dots } = swatchOf(name);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'pal';
+    btn.dataset.palette = name;
+    btn.title = def.note;
+    btn.setAttribute('aria-pressed', 'false');
+    btn.innerHTML =
+      `<span class="chip" style="background:${background}">` +
+      dots.map((c) => `<i style="background:${c}"></i>`).join('') +
+      `</span><small>${def.label}</small>`;
+    btn.addEventListener('click', () => selectPalette(name));
+    grid.appendChild(btn);
+  }
+}
+selectPalette(canvas.paletteName, false);
+
+// --- connection (advanced) ------------------------------------------------
 
 function setStatus(state, name) {
   $('#conn').textContent = name ? `${name}: ${state}` : state;
 }
 
-// The ingest feed needs a server of its own; the others do not. Show its URL
-// field only when it is selected, so a static deployment stays self-evident.
 $('#source').addEventListener('change', () => {
   $('#ingest-row').hidden = $('#source').value !== 'ingest';
 });
@@ -175,21 +240,20 @@ function buildSource() {
 }
 
 $('#connect').onclick = async () => {
-  if (son.locked) await son.unlock();
+  await ensureAudio();
   if (source) son.disconnect(source);
   source = buildSource();
   setStatus('connecting', source.name);
   son.connect(source);
-  refreshUnlock();
+  setRunning(true);
 };
 
-// --- log + stats ----------------------------------------------------------
+// --- log and stats --------------------------------------------------------
 
 const log = $('#log');
 son.on((ev) => {
   if (ev.dimmed) return;
   const li = document.createElement('li');
-  li.className = 'cat-' + ev.category;
   const verb =
     ev.polarity > 0 ? `+${ev.magnitude}` : ev.polarity < 0 ? `−${ev.magnitude}` : `${ev.magnitude}`;
   li.textContent = `${verb}  ${ev.label || ev.id}  ${ev.source ? '(' + ev.source + ')' : ''}`;
@@ -198,9 +262,18 @@ son.on((ev) => {
 });
 
 setInterval(() => {
-  $('#stat').textContent =
-    `${son.eventsPerMinute} events/min · ${son.audio.stats.played} played · ` +
-    `${son.audio.stats.dropped} dropped · ${son.pool.active} voices`;
+  $('#stat').textContent = son.stats.received
+    ? `${son.eventsPerMinute} events/min · ${son.audio.stats.played} played · ${son.pool.active} voices`
+    : '';
+
+  // A last safety net: if events are flowing and nothing has been played, say
+  // so rather than leaving someone staring at silent circles.
+  if (son.engine.locked && son.stats.received > 0) {
+    setAudioStatus('Sound is suspended by the browser. Tap anywhere to resume it.', 'bad');
+    refreshUnlock();
+  } else if (son.stats.received > 12 && son.audio.stats.played === 0 && !son.locked) {
+    setAudioStatus('Events are arriving but nothing is being played. Check the volume and the filters.', 'bad');
+  }
 }, 1000);
 
 // Handy from the console: window.son.emit({magnitude: 5000, id: 'test'})

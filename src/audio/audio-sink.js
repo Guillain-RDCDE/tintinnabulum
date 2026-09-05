@@ -30,10 +30,36 @@ export class AudioSink {
     return [...seen];
   }
 
+  /**
+   * Loads every instrument, tolerating failures, and reports what happened.
+   * A kit that cannot load must say so: failing silently here is how a page
+   * ends up drawing circles and playing nothing.
+   */
   async load() {
     const ctx = this.engine.ctx;
-    await Promise.all(this.instruments().map((i) => i.load(ctx)));
-    return this;
+    const list = this.instruments();
+    const problems = [];
+    await Promise.all(
+      list.map(async (i) => {
+        try {
+          await i.load(ctx);
+        } catch (e) {
+          problems.push(`${i.name}: ${e.message}`);
+        }
+        if (i.failures && i.failures.length) {
+          problems.push(`${i.name}: ${i.failures.length} sample(s) unavailable`);
+        }
+      })
+    );
+    const playable = list.filter((i) => i.ready !== false);
+    this.status = {
+      ok: playable.length === list.length && problems.length === 0,
+      usable: playable.length > 0,
+      instruments: list.length,
+      playable: playable.length,
+      problems,
+    };
+    return this.status;
   }
 
   pick(ev) {

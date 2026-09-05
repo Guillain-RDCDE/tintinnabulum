@@ -67,12 +67,18 @@ const browser = await launch();
 const page = await browser.newPage();
 const consoleErrors = [];
 const badResponses = [];
+// One check below deliberately requests files that do not exist, to prove a
+// partly-broken sample bank still plays. Those failures are expected, so page
+// hygiene is not recorded while that probe runs.
+let probing = false;
 page.on('console', (m) => {
-  if (m.type() === 'error') consoleErrors.push(m.text());
+  if (!probing && m.type() === 'error') consoleErrors.push(m.text());
 });
-page.on('pageerror', (e) => consoleErrors.push('pageerror: ' + e.message));
+page.on('pageerror', (e) => {
+  if (!probing) consoleErrors.push('pageerror: ' + e.message);
+});
 page.on('response', (r) => {
-  if (r.status() >= 400) badResponses.push(r.status() + ' ' + r.url());
+  if (!probing && r.status() >= 400) badResponses.push(r.status() + ' ' + r.url());
 });
 
 const resp = await page.goto(BASE + '/demo/', { waitUntil: 'networkidle' });
@@ -86,6 +92,18 @@ ok('root returned 200', rootResp && rootResp.ok());
 
 await page.waitForFunction(() => window.son, null, { timeout: 15000 });
 ok('engine is exposed on the page', true);
+
+// --- simple mode is what a newcomer lands on ----------------------------
+ok('simple view is shown first', await page.locator('#simple').isVisible());
+ok('the advanced panel is hidden until asked for', await page.locator('#advanced').isHidden());
+ok('there is a single obvious start button', await page.locator('#start').isVisible());
+ok('the palette picker is reachable without going advanced',
+   (await page.locator('#palettes-simple .pal').count()) >= 8);
+
+// Everything below drives the full control panel.
+await page.click('#to-advanced');
+ok('the advanced panel opens on request', await page.locator('#advanced').isVisible());
+ok('simple view steps aside in advanced mode', await page.locator('#simple').isHidden());
 
 // --- unlock + sample decoding -------------------------------------------
 const unlocked = await page.evaluate(async () => {
@@ -153,6 +171,40 @@ ok('sampled celesta renders audible signal', rendered.sampleCelesta > 0.01, 'pea
 ok('sampled clav renders audible signal', rendered.sampleClav > 0.01, 'peak=' + rendered.sampleClav?.toFixed(3));
 ok('resampling past the recorded range still sounds', rendered.sampleStretched > 0.01,
    'peak=' + rendered.sampleStretched?.toFixed(3));
+
+// --- resilience: a bank with missing files must still play --------------
+// This is the bug that made the page silent on a phone: one failed request out
+// of fifty-seven used to reject the whole load and leave the instrument mute
+// forever, while the canvas carried on drawing.
+probing = true;
+const partial = await page.evaluate(async () => {
+  const { SampleInstrument } = await import('../src/audio/instruments.js');
+  const files = [];
+  for (let i = 1; i <= 27; i++) files.push('c' + String(i).padStart(3, '0'));
+  // Break a third of the bank by pointing those names at files that do not exist.
+  const broken = files.map((f, i) => (i % 3 === 0 ? f + '-does-not-exist' : f));
+  const inst = new SampleInstrument({
+    name: 'partial',
+    baseUrl: new URL('../sounds/celesta/', location.href).href,
+    files: broken,
+  });
+  const off = new OfflineAudioContext(1, 44100 * 2, 44100);
+  await inst.load(off);
+  if (!inst.ready) return { ready: false };
+  const v = inst.play(off, off.destination, { semitone: 0, velocity: 1 }); // a missing index
+  const buf = await off.startRendering();
+  const d = buf.getChannelData(0);
+  let peak = 0;
+  for (let i = 0; i < d.length; i++) peak = Math.max(peak, Math.abs(d[i]));
+  return { ready: true, coverage: inst.coverage, failures: inst.failures.length, peak, played: Boolean(v) };
+});
+probing = false;
+ok('a bank with missing files still loads', partial.ready === true);
+ok('the failures are recorded rather than swallowed', partial.failures === 9, 'failures=' + partial.failures);
+ok('coverage is reported honestly', Math.abs(partial.coverage - 18 / 27) < 0.01,
+   'coverage=' + (partial.coverage || 0).toFixed(2));
+ok('a missing note is covered by its neighbour and still sounds', partial.peak > 0.01,
+   'peak=' + (partial.peak || 0).toFixed(3));
 
 // --- live pipeline: events in, notes and pixels out ---------------------
 const live = await page.evaluate(async () => {
@@ -294,6 +346,66 @@ ok('every resource the page requests resolves', badResponses.length === 0,
    badResponses.slice(0, 4).join(' | '));
 ok('no console errors on the page', consoleErrors.length === 0,
    consoleErrors.slice(0, 3).join(' | '));
+
+// --- phone-sized, touch-driven ------------------------------------------
+// The report that started this was "I see the circles and hear nothing on my
+// phone", so the phone path is exercised rather than assumed.
+const mobile = await browser.newContext({
+  viewport: { width: 390, height: 844 },
+  deviceScaleFactor: 3,
+  isMobile: true,
+  hasTouch: true,
+  userAgent:
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 ' +
+    '(KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+});
+const mp = await mobile.newPage();
+const mobileErrors = [];
+mp.on('pageerror', (e) => mobileErrors.push(e.message));
+await mp.goto(BASE + '/demo/', { waitUntil: 'networkidle' });
+await mp.waitForFunction(() => window.son, null, { timeout: 15000 });
+
+ok('phone: simple view is what loads', await mp.locator('#simple').isVisible());
+ok('phone: the start button is reachable without scrolling sideways',
+   await mp.locator('#start').isVisible());
+
+const overflow = await mp.evaluate(() => ({
+  doc: document.documentElement.scrollWidth,
+  win: window.innerWidth,
+}));
+ok('phone: the page does not scroll sideways', overflow.doc <= overflow.win + 1,
+   `${overflow.doc} vs ${overflow.win}`);
+
+const tapTarget = await mp.locator('#start').boundingBox();
+ok('phone: the start button is a comfortable tap target',
+   tapTarget && tapTarget.height >= 44, tapTarget ? `${Math.round(tapTarget.height)}px tall` : 'missing');
+
+await mp.tap('#start');
+await mp.waitForTimeout(2500);
+const mobileAudio = await mp.evaluate(() => ({
+  state: window.son.engine.ctx.state,
+  status: window.son.audioStatus,
+  statusText: document.querySelector('#audio-status').textContent,
+  running: document.querySelector('#start').dataset.on,
+}));
+ok('phone: tapping start unlocks the audio context',
+   mobileAudio.state === 'running', mobileAudio.state);
+ok('phone: the kit is usable after the tap',
+   mobileAudio.status && mobileAudio.status.usable === true,
+   JSON.stringify(mobileAudio.status && mobileAudio.status.problems));
+ok('phone: audio state is stated on screen, never left silent',
+   /Sound on/i.test(mobileAudio.statusText), mobileAudio.statusText);
+ok('phone: the button reflects that it is running', mobileAudio.running === 'true');
+
+const mobileSound = await mp.evaluate(async () => {
+  const before = window.son.audio.stats.played;
+  for (let i = 0; i < 20; i++) window.son.emit({ magnitude: 200 * (i + 1), id: 'phone-' + i });
+  await new Promise((r) => setTimeout(r, 300));
+  return window.son.audio.stats.played - before;
+});
+ok('phone: notes are actually scheduled', mobileSound > 0, 'played=' + mobileSound);
+ok('phone: no page errors', mobileErrors.length === 0, mobileErrors.slice(0, 2).join(' | '));
+await mobile.close();
 
 await browser.close();
 if (srv) srv.kill();

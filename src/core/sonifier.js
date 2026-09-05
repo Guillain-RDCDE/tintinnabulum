@@ -86,11 +86,32 @@ export class Sonifier {
 
   // --- lifecycle ----------------------------------------------------------
 
-  /** Call from a click handler: resumes the AudioContext and loads samples. */
+  /**
+   * Call from a click handler: resumes the AudioContext and loads the kit.
+   *
+   * Returns a status rather than a bare boolean, because "the context is
+   * running" and "you will actually hear something" are different questions,
+   * and the caller needs to be able to tell the user which one failed. If the
+   * sample kit cannot be loaded at all -- a flaky mobile connection, a blocked
+   * request -- it falls back to synthesis, which needs no network, so the page
+   * still makes sound.
+   */
   async unlock() {
-    const ok = await this.engine.unlock();
-    await this.audio.load();
-    return ok;
+    const running = await this.engine.unlock();
+    let status = await this.audio.load();
+
+    if (!status.usable) {
+      this.audio.setKit(synthKit());
+      status = await this.audio.load();
+      status.fellBackToSynth = status.usable;
+    }
+
+    this.audioStatus = {
+      running,
+      audible: running && status.usable,
+      ...status,
+    };
+    return this.audioStatus;
   }
 
   get locked() {

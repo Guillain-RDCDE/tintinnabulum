@@ -165,7 +165,7 @@ That is the entire interface. The bundled ones:
 | `sseSource({url, map})` | `EventSource` | Reconnects on its own. |
 | `websocketSource({url, map})` | `WebSocket` | Exponential backoff, 1 s → 30 s. |
 | `pollSource({url, interval, map})` | `fetch` on a timer | De-duplicates by `id`, remembering the last 500. |
-| `ingestSource({url})` | SSE from the bundled server | See [the ingest server](#10-the-ingest-server). |
+| `ingestSource({url})` | SSE from the bundled server | See [the ingest server](#11-the-ingest-server). |
 | `manualSource()` / `son.emit()` | none | Call it yourself. |
 | `randomSource({rate})` | none | Synthetic traffic for tuning offline. |
 
@@ -373,13 +373,39 @@ It is Canvas 2D rather than SVG because the original's one-DOM-node-plus-
 transition per circle does not survive a busy multi-language feed, and because
 D3 v3's API was removed in v4 — a migration was a rewrite either way.
 
-### 9. The recorder
+### 9. Failing loudly
+
+Two things make audio fail in ways that are invisible from the outside, and
+both are handled explicitly rather than left to chance.
+
+**A partly-broken sample bank.** Loading the banks used to be a single
+`Promise.all` over fifty-seven requests, so one failed request left the whole
+instrument permanently mute — while the canvas carried on drawing circles. On a
+phone, one flaky request out of fifty-seven is close to expected, which is
+exactly how this was found. Each file now settles independently: a missing note
+drops out of the bank, its neighbour is resampled to cover the gap, and the
+failures are recorded in `instrument.failures` with `instrument.coverage`
+reporting how much of the bank arrived. If a kit cannot load at all, the engine
+falls back to synthesis, which needs no network.
+
+**A muted or suspended context.** `unlock()` sets `navigator.audioSession.type`
+to `playback` where it exists: without it, iOS routes Web Audio through the
+ambient session, which the hardware ring/silent switch mutes — the page looks
+perfectly alive and plays nothing. Mobile browsers also suspend the context when
+a tab is backgrounded and do not reliably resume it, so a `visibilitychange`
+listener resumes it on return.
+
+`unlock()` returns a status rather than a boolean, because "the context is
+running" and "you will actually hear something" are different questions and the
+interface has to be able to say which one failed.
+
+### 10. The recorder
 
 Taps the master gain into a `MediaStreamDestination`, runs `MediaRecorder` over
 it, and hands back a Blob (Opus in WebM where available). It records what you
 actually hear, mix and all.
 
-### 10. The ingest server
+### 11. The ingest server
 
 `node server/ingest.mjs` — around 250 lines, no dependencies, and it serves the
 static files too.

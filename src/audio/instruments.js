@@ -63,21 +63,40 @@ export class SampleInstrument extends Instrument {
     super(name);
     Object.assign(this, { baseUrl, files, exts, step, baseSemitone, gain, maxStretch });
     this._buffers = null;
+    this._loaded = null;
     this._loading = null;
+    this.failures = [];
   }
 
+  /**
+   * Loads the bank, tolerating individual failures.
+   *
+   * This used to be a Promise.all, which meant one failed request out of
+   * fifty-seven left the whole instrument permanently silent -- and silent is
+   * exactly how it failed, with the visuals carrying on regardless. On a phone,
+   * one flaky request out of fifty-seven is close to expected. A missing note
+   * now simply drops out of the bank and its neighbour is resampled to cover
+   * the gap.
+   */
   async load(ctx) {
     if (this._buffers) return this;
     if (!this._loading) {
       const ext = pickExtension(this.exts);
+      this.failures = [];
       this._loading = Promise.all(
         this.files.map(async (f) => {
-          const res = await fetch(this.baseUrl + f + '.' + ext);
-          if (!res.ok) throw new Error(`${this.name}: cannot load ${f}.${ext} (${res.status})`);
-          return ctx.decodeAudioData(await res.arrayBuffer());
+          try {
+            const res = await fetch(this.baseUrl + f + '.' + ext);
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return await ctx.decodeAudioData(await res.arrayBuffer());
+          } catch (e) {
+            this.failures.push(`${f}.${ext}: ${e.message}`);
+            return null;
+          }
         })
       ).then((bufs) => {
         this._buffers = bufs;
+        this._loaded = bufs.reduce((acc, b, i) => (b ? (acc.push(i), acc) : acc), []);
         return this;
       });
     }
@@ -85,20 +104,38 @@ export class SampleInstrument extends Instrument {
   }
 
   get ready() {
-    return Boolean(this._buffers && this._buffers.length);
+    return Boolean(this._loaded && this._loaded.length);
+  }
+
+  /** Fraction of the bank that actually loaded, 0 to 1. */
+  get coverage() {
+    return this._loaded && this.files.length ? this._loaded.length / this.files.length : 0;
+  }
+
+  _nearestLoaded(want) {
+    let best = this._loaded[0];
+    let bestD = Math.abs(best - want);
+    for (const i of this._loaded) {
+      const d = Math.abs(i - want);
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    }
+    return best;
   }
 
   play(ctx, dest, { semitone = 0, velocity = 1, when = 0 } = {}) {
     if (!this.ready) return null;
-    const n = this._buffers.length;
     let idx;
     let rate = 1;
     if (this.step === 0) {
       // Unpitched bank (one-shots): pick a variation at random.
-      idx = Math.floor(Math.random() * n);
+      idx = this._loaded[Math.floor(Math.random() * this._loaded.length)];
     } else {
       const rel = (semitone - this.baseSemitone) / this.step;
-      idx = Math.max(0, Math.min(n - 1, Math.round(rel)));
+      const want = Math.max(0, Math.min(this.files.length - 1, Math.round(rel)));
+      idx = this._nearestLoaded(want); // a gap in the bank is covered by its neighbour
       let offset = (rel - idx) * this.step; // semitones of resampling
       offset = Math.max(-this.maxStretch, Math.min(this.maxStretch, offset));
       rate = Math.pow(2, offset / 12);

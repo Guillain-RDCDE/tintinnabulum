@@ -20,8 +20,9 @@ the whole pipeline, explained from first principles. ·
 
 ## Getting started
 
-**[Open the sandbox.](https://guillain-rdcde.github.io/tintinnabulum/)** Click
-once anywhere on the page to allow sound, then press **Connect**.
+**[Open the sandbox.](https://guillain-rdcde.github.io/tintinnabulum/)** Press
+**Start listening to Wikipedia**. That is the only step; the button also asks
+the browser for permission to make sound.
 
 You are now listening to Wikipedia. Every circle is somebody editing an article,
 somewhere in the world, at that moment.
@@ -32,11 +33,15 @@ somewhere in the world, at that moment.
   contributor. *(Those are the default colours; there are nine palettes.)*
 - Clicking a circle opens the article that produced the sound.
 
-That is the whole idea. It is designed to be left running in a background tab.
+That is the whole idea. It is designed to be left running in a background tab,
+and it works on a phone.
 
-If you would rather not listen to Wikipedia, choose **Synthetic traffic** in the
-**Source** box for a steady stream of generated events. To hear your own data,
-see [Sending your own data](#sending-your-own-data) — it is one `curl` command.
+The sandbox opens in a simple view: one button, the colour palettes, and
+nothing else. **Advanced settings** reveals the full panel — sources, languages,
+instruments, scales, filters, recording — and the choice is remembered. If you
+would rather not listen to Wikipedia, choose **Synthetic traffic** there for a
+stream of generated events. To hear your own data, see
+[Sending your own data](#sending-your-own-data) — it is one `curl` command.
 
 For an explanation of what actually happens between the live feed and the note
 in your speakers, see **[How it works](docs/HOW-IT-WORKS.md)**, which covers it
