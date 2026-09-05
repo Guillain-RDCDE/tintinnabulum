@@ -4,16 +4,16 @@ Everything this project does, from the data going in to the sound and the
 picture coming out. The first half assumes nothing. The second half assumes you
 write code.
 
-- [🟢 In plain English](#-in-plain-english)
+- [In plain English](#in-plain-english)
 - [The whole pipeline in one picture](#the-whole-pipeline-in-one-picture)
-- [🔵 Stage by stage](#-stage-by-stage)
+- [Stage by stage](#stage-by-stage)
 - [Three worked examples, with real numbers](#three-worked-examples-with-real-numbers)
 - [What you get out](#what-you-get-out)
 - [Why it is built this way](#why-it-is-built-this-way)
 
 ---
 
-## 🟢 In plain English
+## In plain English
 
 ### The idea in one paragraph
 
@@ -140,13 +140,13 @@ That is a complete, working data source.
             │ play the note  │       │ ring + fade   │        │               │
             └───────┬───────┘        └───────┬───────┘        └───────┬───────┘
                     ▼                        ▼                        ▼
-                 🔊 sound              🖥 circles on a           💾 .webm you
-                                          dark canvas              can keep
+                    sound                circles on a            a .webm file
+                                          dark canvas             you can keep
 ```
 
 ---
 
-## 🔵 Stage by stage
+## Stage by stage
 
 ### 1. Input — what a source is
 

@@ -66,7 +66,8 @@ export class Recorder {
   async save(filename) {
     const blob = await this.stop();
     const ext = (this.mimeType.split('/')[1] || 'webm').split(';')[0];
-    const name = filename || `sonify-${new Date().toISOString().replace(/[:.]/g, '-')}.${ext}`;
+    const name =
+      filename || `tintinnabulum-${new Date().toISOString().replace(/[:.]/g, '-')}.${ext}`;
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;

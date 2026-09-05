@@ -7,7 +7,7 @@
 let _auto = 0;
 
 /**
- * @typedef {Object} SonifyEvent
+ * @typedef {Object} SonificationEvent
  * @property {number}  magnitude  Absolute size of the event. Drives pitch and radius.
  * @property {-1|0|1}  polarity   Instrument selection: +1 bell, -1 pluck, 0 neutral.
  * @property {string}  id         Stable identity: seeds the on-screen position.

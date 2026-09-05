@@ -262,7 +262,7 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`sonify ingest listening on http://localhost:${PORT}`);
+  console.log(`tintinnabulum ingest listening on http://localhost:${PORT}`);
   console.log(`  static root : ${ROOT}`);
   console.log(`  demo        : http://localhost:${PORT}/demo/`);
   console.log(`  stream      : http://localhost:${PORT}/events`);
