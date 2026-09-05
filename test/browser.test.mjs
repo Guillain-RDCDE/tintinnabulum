@@ -81,7 +81,7 @@ page.on('response', (r) => {
   if (!probing && r.status() >= 400) badResponses.push(r.status() + ' ' + r.url());
 });
 
-const resp = await page.goto(BASE + '/demo/', { waitUntil: 'networkidle' });
+const resp = await page.goto(BASE + '/demo/', { waitUntil: 'domcontentloaded' });
 ok('demo page loads', resp && resp.ok(), 'status=' + (resp && resp.status()));
 
 // The sandbox root must redirect here, or the Pages URL is a dead end.
@@ -390,7 +390,7 @@ ok('the sink reports the palette it is using', recoloured.name === 'ultraviolet'
 // The choice must survive a reload, and must not break when storage is denied.
 await page.click('#palettes .sw[data-palette="bronze"]');
 await page.waitForTimeout(100);
-await page.reload({ waitUntil: 'networkidle' });
+await page.reload({ waitUntil: 'domcontentloaded' });
 await page.waitForFunction(() => window.son, null, { timeout: 15000 });
 const restored = await page.evaluate(
   () => window.son.sinks.find((s) => s.particles).paletteName
@@ -747,7 +747,7 @@ const mobile = await browser.newContext({
 const mp = await mobile.newPage();
 const mobileErrors = [];
 mp.on('pageerror', (e) => mobileErrors.push(e.message));
-await mp.goto(BASE + '/demo/', { waitUntil: 'networkidle' });
+await mp.goto(BASE + '/demo/', { waitUntil: 'domcontentloaded' });
 await mp.waitForFunction(() => window.son, null, { timeout: 15000 });
 
 ok('phone: the essentials are on screen without digging',
