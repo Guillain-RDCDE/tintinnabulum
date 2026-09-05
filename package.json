@@ -1,0 +1,49 @@
+{
+  "name": "tintinnabulum",
+  "version": "0.1.0",
+  "description": "Sonification engine: turn any stream of events into sound and light. No build step, no dependencies.",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./sources": "./src/sources/index.js",
+    "./canvas": "./src/visual/canvas-sink.js"
+  },
+  "files": [
+    "src",
+    "server",
+    "sounds",
+    "LICENSE",
+    "NOTICE",
+    "README.md"
+  ],
+  "scripts": {
+    "serve": "node server/ingest.mjs",
+    "test": "node test/core.test.mjs && node test/server.test.mjs"
+  },
+  "keywords": [
+    "sonification",
+    "audio",
+    "web-audio",
+    "data",
+    "visualization",
+    "canvas",
+    "sse",
+    "observability",
+    "wikipedia"
+  ],
+  "license": "BSD-3-Clause",
+  "author": "Guillain d'Erceville",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Guillain-RDCDE/tintinnabulum.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Guillain-RDCDE/tintinnabulum/issues"
+  },
+  "homepage": "https://github.com/Guillain-RDCDE/tintinnabulum#readme",
+  "engines": {
+    "node": ">=18"
+  },
+  "sideEffects": false
+}

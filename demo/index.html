@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sonify — demo</title>
+<style>
+  :root {
+    --bg: #f8f8f8; --fg: #1c2733; --line: #dde3e8; --accent: #306596; --warn: #cc4731;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.5 system-ui, sans-serif; background: var(--bg); color: var(--fg); }
+  header { display: flex; align-items: center; gap: 1em; padding: .6em 1em; flex-wrap: wrap; }
+  h1 { font-size: 1.2em; margin: 0; }
+  #stage { position: relative; }
+  canvas { display: block; width: 100%; height: 62vh; background: #1c2733; }
+  #unlock {
+    position: absolute; inset: 0; display: none; place-items: center;
+    background: rgba(28,39,51,.72); color: #fff; cursor: pointer;
+    font-size: 1.4em; letter-spacing: .02em;
+  }
+  #unlock.show { display: grid; }
+  #unlock span { animation: pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .45 } }
+  .panel { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: .8em 1.2em; padding: 1em; max-width: 1200px; }
+  fieldset { border: 1px solid var(--line); border-radius: 4px; padding: .6em .8em .8em; margin: 0; background: #fff; }
+  legend { font-weight: 600; font-size: .85em; text-transform: uppercase; letter-spacing: .06em; color: #6b7a88; padding: 0 .3em; }
+  label { display: block; font-size: .9em; margin-top: .4em; }
+  select, input[type=text], input[type=number] { width: 100%; padding: .3em; font: inherit; border: 1px solid var(--line); border-radius: 3px; }
+  input[type=range] { width: 100%; }
+  button { font: inherit; padding: .4em .8em; border: 1px solid var(--line); background: #fff; border-radius: 3px; cursor: pointer; }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button.rec { color: var(--warn); border-color: var(--warn); }
+  .row { display: flex; gap: .5em; align-items: center; }
+  #log { max-width: 1200px; margin: 0 1em 3em; padding: 0; list-style: none; font-size: .85em; border: 1px solid var(--line); background: #fff; border-radius: 4px; max-height: 220px; overflow: hidden; }
+  #log li { padding: .25em .6em; border-bottom: 1px solid #f0f3f5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cat-bot { color: #9b59b6 } .cat-anon { color: #27ae60 } .cat-alert { color: #d35400 }
+  .stat { font-variant-numeric: tabular-nums; color: #6b7a88; font-size: .85em; }
+  code { background: #eef1f4; padding: .1em .3em; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>sonify</h1>
+  <span class="stat" id="stat"></span>
+</header>
+
+<div id="stage">
+  <canvas id="canvas"></canvas>
+  <div id="unlock"><span>♫ click to enable sound</span></div>
+</div>
+
+<div class="panel">
+  <fieldset>
+    <legend>Source</legend>
+    <label>Feed
+      <select id="source">
+        <option value="eventstreams">Wikipedia — EventStreams (HTTPS)</option>
+        <option value="wikimon">Wikipedia — wikimon (Hatnote)</option>
+        <option value="ingest">Ingest server (/events)</option>
+        <option value="random">Synthetic traffic</option>
+      </select>
+    </label>
+    <label>Languages <input type="text" id="langs" value="en" placeholder="en,fr,de"></label>
+    <div class="row" style="margin-top:.6em">
+      <button id="connect">Connect</button>
+      <span class="stat" id="conn">idle</span>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Instruments</legend>
+    <label>Kit
+      <select id="kit">
+        <option value="hatnote">Samples — celesta &amp; clav</option>
+        <option value="synth">Synthesis — FM bell &amp; pluck</option>
+      </select>
+    </label>
+    <label>Volume <input type="range" id="volume" min="0" max="100" value="70"></label>
+    <label>Max voices <input type="number" id="voices" min="1" max="64" value="16"></label>
+    <div class="row" style="margin-top:.6em">
+      <button id="record">● Record</button>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Mapping</legend>
+    <label>Mode
+      <select id="mode">
+        <option value="adaptive">Adaptive (self-calibrating)</option>
+        <option value="log">Logarithmic</option>
+        <option value="linear">Linear</option>
+      </select>
+    </label>
+    <label>Scale <select id="scale"></select></label>
+    <label>Range (semitones) <input type="number" id="range" min="6" max="60" value="27"></label>
+    <label class="row" style="gap:.4em"><input type="checkbox" id="invert" checked> Big event = low note</label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Filter</legend>
+    <label>Only these categories
+      <select id="cats" multiple size="4">
+        <option value="user" selected>user</option>
+        <option value="anon" selected>anon</option>
+        <option value="bot" selected>bot</option>
+        <option value="alert" selected>alert</option>
+      </select>
+    </label>
+    <label>Min magnitude <input type="number" id="minmag" value="0" min="0"></label>
+  </fieldset>
+</div>
+
+<ul id="log"></ul>
+
+<script type="module" src="./demo.js"></script>
+</body>
+</html>

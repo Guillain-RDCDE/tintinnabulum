@@ -1,0 +1,81 @@
+Tintinnabulum — third-party material and attribution
+====================================================
+
+Tintinnabulum is an independent project, not a fork. Its engine (event
+contract, adaptive mapper, voice allocator, Canvas renderer, ingest server)
+was written for this repository. Two things nonetheless come from elsewhere
+and are acknowledged here.
+
+
+1. Audio samples — sounds/
+--------------------------
+
+The 108 files under sounds/ (celesta/, clav/, swells/) are redistributed from:
+
+    Listen to Wikipedia
+    https://github.com/hatnote/listen-to-wikipedia
+    Copyright (c) 2013, Stephen LaPorte and Mahmoud Hashemi
+    BSD 3-Clause License
+
+The full text of that license is reproduced below, as its terms require.
+
+Provenance note: that project's README states the sounds were processed with
+SoX and that the project was inspired by BitListen by Maximillian Laumeister.
+The origin of the raw samples is not documented upstream, so their provenance
+prior to 2013 could not be established. Anyone with a stricter provenance
+requirement should use the built-in synthesis kit instead, which needs no
+audio files at all:
+
+    new Sonifier({ kit: 'synth' })
+
+
+2. Sonification concept
+-----------------------
+
+The core idea — a bell for growth, a plucked string for shrinkage, pitch
+inversely proportional to the size of the change — originates with Listen to
+Wikipedia, and through it with BitListen. Tintinnabulum generalises that idea
+to arbitrary data; it does not claim to have invented it.
+
+
+No endorsement
+--------------
+
+Per clause 3 of the license below, the names Hatnote, Stephen LaPorte,
+Mahmoud Hashemi and Maximillian Laumeister are used here for attribution only.
+They do not endorse this project, and are in no way associated with it.
+
+
+--------------------------------------------------------------------------
+License covering the material in sounds/
+--------------------------------------------------------------------------
+
+Copyright (c) 2013, Stephen LaPorte and Mahmoud Hashemi
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+    * Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+
+    * Redistributions in binary form must reproduce the above
+      copyright notice, this list of conditions and the following
+      disclaimer in the documentation and/or other materials provided
+      with the distribution.
+
+    * The names of the contributors may not be used to endorse or
+      promote products derived from this software without specific
+      prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
