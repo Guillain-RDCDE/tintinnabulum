@@ -423,18 +423,39 @@ ok('every Wikipedia edition has a button', langCount >= 40, langCount + ' editio
 ok('English is selected by default',
    (await page.getAttribute('#langs-grid .lang[data-lang="en"]', 'aria-pressed')) === 'true');
 
+// Flags are images, not emoji. Windows ships no country-flag glyphs, so an
+// emoji-based picker renders as the bare letters "GB" for every visitor on a
+// PC -- which is exactly how this was found. These checks therefore prove the
+// images decoded, not merely that some text is present.
+await page.waitForFunction(
+  () => [...document.querySelectorAll('#langs-grid img.fl')].every((i) => i.complete),
+  null,
+  { timeout: 20000 }
+);
 const flagInfo = await page.evaluate(() => {
   const btns = [...document.querySelectorAll('#langs-grid .lang')];
+  const imgs = btns.map((b) => b.querySelector('img.fl')).filter(Boolean);
+  const names = btns.map((b) => b.querySelector('.nm').textContent.trim());
   return {
-    withFlag: btns.filter((b) => /\p{Regional_Indicator}/u.test(b.querySelector('.fl').textContent)).length,
-    fallback: btns.filter((b) => !/\p{Regional_Indicator}/u.test(b.querySelector('.fl').textContent)).length,
-    named: btns.every((b) => b.querySelector('.nm').textContent.trim().length > 0),
+    total: btns.length,
+    imgs: imgs.length,
+    decoded: imgs.filter((i) => i.naturalWidth > 0 && i.naturalHeight > 0).length,
+    distinctSrc: new Set(imgs.map((i) => i.getAttribute('src'))).size,
+    distinctNames: new Set(names).size,
+    named: names.every((n) => n.length > 0),
     titled: btns.every((b) => (b.getAttribute('title') || '').includes('—')),
   };
 });
-ok('most editions show a flag', flagInfo.withFlag >= 25, flagInfo.withFlag + ' flagged');
-ok('the rest fall back to a code rather than a wrong flag', flagInfo.fallback > 0,
-   flagInfo.fallback + ' without');
+ok('every edition has a flag image', flagInfo.imgs === flagInfo.total,
+   `${flagInfo.imgs}/${flagInfo.total}`);
+ok('every flag image actually decoded, not a broken icon',
+   flagInfo.decoded === flagInfo.total, `${flagInfo.decoded}/${flagInfo.total} decoded`);
+ok('the flags are not all the same picture', flagInfo.distinctSrc >= 25,
+   flagInfo.distinctSrc + ' distinct flags');
+// Ten Indic editions necessarily share one flag, so the endonym is what tells
+// them apart. If two ever collided, the picker would become ambiguous.
+ok('no two editions are labelled the same', flagInfo.distinctNames === flagInfo.total,
+   `${flagInfo.distinctNames}/${flagInfo.total} distinct`);
 ok('every edition is labelled in its own language', flagInfo.named);
 ok('hovering names the language in full', flagInfo.titled);
 
@@ -499,7 +520,14 @@ if (USE_LOCAL_SERVER) {
   await page.selectOption('#source', 'ingest');
   await page.fill('#ingest-url', BASE + '/events');
   await page.click('#connect');
-  await page.waitForTimeout(600);
+  // Wait for the stream to be open rather than for a fixed delay: the connect
+  // handler prepares audio first, and how long that takes is not this test's
+  // business.
+  await page.waitForFunction(
+    () => window.son.sources.some((s) => s.status === 'open'),
+    null,
+    { timeout: 20000 }
+  );
   const before = await page.evaluate(() => window.son.stats.received);
   await fetch(BASE + '/emit?magnitude=7777&id=from-curl&label=end-to-end');
   await page.waitForTimeout(900);

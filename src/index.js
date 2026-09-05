@@ -48,5 +48,6 @@ export {
   github,
   WIKIPEDIA_LANGS,
   WIKIPEDIA_LANGUAGES,
+  WIKIPEDIA_FLAG_CC,
   WIKIMON_PORTS,
 } from './sources/index.js';

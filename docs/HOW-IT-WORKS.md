@@ -373,8 +373,8 @@ inside a bigger site, with no configuration.
 - **Lifecycle**: fade over 12 s; a shockwave ring expands from `r+20` to `r+40`
   over 2.2 s on an ease-out; the label shows for 3 s and on hover; oldest
   particles are culled past 800.
-- **Colour** by category, from the active palette — in the default *Nocturne*:
-  white for a logged-in user, green anonymous, purple bot, orange alert. A
+- **Colour** by category, from the active palette — in the default *Blueprint*:
+  near-white for a logged-in user, sky blue anonymous, indigo bot, amber alert. A
   category nobody defined falls back to `default`, so custom data always gets a
   visible colour instead of vanishing.
 - Clicking a circle hit-tests newest-first and opens its `url`.

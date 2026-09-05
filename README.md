@@ -211,8 +211,8 @@ Thirteen, selectable at runtime and stored as plain data in
 
 | | | |
 |---|---|---|
-| **Nocturne** — slate blue, the default | **Bronze** — brass and copper | **Aurora** — mint and violet |
-| **Ember** — banked fire | **Ultraviolet** — magenta and cyan | **Blueprint** — technical, calmest |
+| **Blueprint** — technical, calmest, the default | **Bronze** — brass and copper | **Aurora** — mint and violet |
+| **Ember** — banked fire | **Ultraviolet** — magenta and cyan | **Nocturne** — slate blue, the original |
 | **Sakura** — blossom on plum | **Nordic** — ice and steel | **Marine** — deep water |
 | **Lacquer** — vermilion and gold on black | **Solar** — daylight on deep navy | **Daylight** — ink on paper, for projectors |
 | **Monochrome** — lightness only | | |

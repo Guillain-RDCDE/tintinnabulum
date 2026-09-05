@@ -18,6 +18,7 @@ import {
   ingestSource,
   randomSource,
   WIKIPEDIA_LANGUAGES,
+  WIKIPEDIA_FLAG_CC,
 } from '../src/index.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -175,7 +176,11 @@ const FEEDS = {
   bluesky: {
     label: 'Bluesky',
     blurb: 'Public post firehose',
-    note: 'Posts as they are written, pitched by length. Labels carry the size rather than the text: an unfiltered firehose is not something to put on your screen unasked.',
+    // Measured at roughly 37 posts a second, which saturates the voice pool
+    // continuously and turns into a wall rather than music. Capped so the
+    // salience-based allocator can do its job and pick out the larger posts.
+    maxPerSecond: 12,
+    note: 'Posts as they are written, pitched by length. Around two thousand a minute, so only the most substantial are given a voice. Labels carry the size rather than the text: an unfiltered firehose is not something to put on your screen unasked.',
     make: () => bluesky({ onStatus: setStatus }),
   },
   github: {
@@ -212,6 +217,8 @@ function selectFeed(name, persist = true) {
     b.setAttribute('aria-pressed', String(b.dataset.feed === name));
   }
   if ($('#source').value !== name && FEEDS[name]) $('#source').value = name;
+  // Feeds differ by two orders of magnitude in rate, so each may cap its own.
+  son.pool.maxPerSecond = FEEDS[name].maxPerSecond || 0;
   if (persist) store.set('tintinnabulum:feed', name);
   if (startBtn.dataset.on !== 'true') setRunning(false);
 }
@@ -249,9 +256,15 @@ for (const l of WIKIPEDIA_LANGUAGES) {
   btn.dataset.lang = l.code;
   btn.title = `${l.name} — ${l.native} (${l.code})`;
   btn.setAttribute('aria-pressed', 'false');
-  const fl = document.createElement('span');
+  // An <img>, not an emoji: Windows has no flag glyphs, so emoji flags render
+  // as the bare letters "GB" or "FR" for every visitor on a PC.
+  const fl = document.createElement('img');
   fl.className = 'fl';
-  fl.textContent = l.flag || l.code.toUpperCase();
+  fl.src = `flags/${WIKIPEDIA_FLAG_CC[l.code] || 'eo'}.svg`;
+  fl.alt = '';
+  fl.width = 24;
+  fl.height = 18;
+  fl.loading = 'lazy';
   const nm = document.createElement('span');
   nm.className = 'nm';
   nm.textContent = l.native;

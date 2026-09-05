@@ -29,7 +29,25 @@ audio files at all:
     new Sonifier({ kit: 'synth' })
 
 
-2. Sonification concept
+2. Flag images -- demo/flags/
+-----------------------------
+
+The 31 national flags under demo/flags/ come from:
+
+    flag-icons
+    https://github.com/lipis/flag-icons
+    Copyright (c) 2013 Panayiotis Lipiridis
+    MIT License
+
+They are used because emoji flags cannot be relied upon: Windows ships no
+country-flag glyphs, so every browser on it renders them as the two bare
+letters instead of a flag.
+
+demo/flags/eo.svg is not from that set and is not a national flag. It is the
+flag of Esperanto, drawn for this project.
+
+
+3. Sonification concept
 -----------------------
 
 The core idea — a bell for growth, a plucked string for shrinkage, pitch

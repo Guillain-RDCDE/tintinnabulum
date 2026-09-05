@@ -125,7 +125,15 @@ export function sseSource({
   };
 }
 
-/** Poll an HTTP endpoint. `map` returns an event or an array of them. */
+/**
+ * Poll an HTTP endpoint. `map` returns an event or an array of them.
+ *
+ * Batches are trickled out rather than delivered in one instant. A poller that
+ * emits its whole page at once produces a single blurred chord -- most of it
+ * dropped, since only so many voices exist -- followed by a minute of silence,
+ * which sounds broken even though nothing is. Spreading the batch across the
+ * gap until the next poll turns the same data into a steady stream.
+ */
 export function pollSource({
   url,
   interval = 5000,
@@ -134,9 +142,16 @@ export function pollSource({
   fetchOptions,
   dedupe = true,
   dedupeSize = 500,
+  spread = true,
+  // Cover almost the whole gap to the next poll. A shorter window leaves an
+  // audible hole at the end of every cycle -- 45 s of sound then 30 s of
+  // nothing, which is heard as the feed dying rather than as pacing.
+  spreadFraction = 0.95,
+  maxSpread = Infinity,
 }) {
   let timer = 0;
   let stopped = false;
+  const pending = new Set();
   const seen = new Set();
   const order = [];
 
@@ -148,6 +163,22 @@ export function pollSource({
     order.push(k);
     if (order.length > dedupeSize) seen.delete(order.shift());
     return true;
+  };
+
+  const deliver = (list, emit) => {
+    if (!spread || list.length <= 1) {
+      for (const ev of list) emit(ev);
+      return;
+    }
+    const window = Math.min(maxSpread, interval * spreadFraction);
+    const gap = window / list.length;
+    list.forEach((ev, i) => {
+      const t = setTimeout(() => {
+        pending.delete(t);
+        if (!stopped) emit(ev);
+      }, Math.round(i * gap));
+      pending.add(t);
+    });
   };
 
   return {
@@ -162,7 +193,7 @@ export function pollSource({
           const body = await res.json();
           const out = map(body);
           const list = Array.isArray(out) ? out : out ? [out] : [];
-          for (const ev of list) if (fresh(ev)) emit(ev);
+          deliver(list.filter(fresh), emit);
         } catch (e) {
           console.warn(name + ': poll failed', e);
         }
@@ -173,6 +204,8 @@ export function pollSource({
     stop() {
       stopped = true;
       clearTimeout(timer);
+      for (const t of pending) clearTimeout(t);
+      pending.clear();
     },
   };
 }
@@ -304,7 +337,11 @@ export function coinbase({ product = 'BTC-USD', name = 'coinbase', onStatus = nu
  * domain's own word for it. Quiet by nature: a handful an hour.
  */
 export function earthquakes({
-  window = 'all_hour',
+  // A day rather than an hour: the past hour holds about ten events, which is
+  // a few seconds of sound and then nothing. A day holds a few hundred, so the
+  // opening trickle lasts. After that the feed is genuinely quiet, because
+  // earthquakes are genuinely rare -- that is the world, not the software.
+  window = 'all_day',
   interval = 60000,
   bigMag = 5,
   name = 'earthquakes',
@@ -559,12 +596,34 @@ export const WIKIMON_PORTS = {
 /**
  * Wikipedia languages for a picker: code, English name, endonym, and a flag.
  *
- * A caveat worth stating rather than hiding: flags are countries, languages are
- * not. Several here are spoken across many states and belong to none of them,
- * so the flag is decoration and the name is the identifier. Where no single
- * country is defensible -- Arabic, Esperanto, Wikidata -- there is no flag at
- * all rather than an arbitrary one.
+ * Flags are countries and languages are not, so these are a visual cue and
+ * nothing more -- the endonym is the identifier. Ten of the Indic editions
+ * necessarily share one flag, which is why every entry also carries its name
+ * in its own script: Tamil, Kannada and Gujarati are told apart at a glance by
+ * their writing, never by the flag above it. Esperanto belongs to no country
+ * at all and takes a globe.
  */
+/**
+ * Which flag image stands for each edition.
+ *
+ * Kept separate from the emoji above because emoji flags are unusable in
+ * practice: Windows ships no country-flag glyphs at all, so every browser on
+ * it draws the two letters instead -- "GB", "FR". An interface built on them
+ * is broken for a large share of visitors, which is why the picker uses SVG
+ * images and these codes rather than the emoji.
+ */
+export const WIKIPEDIA_FLAG_CC = {
+  en: 'gb', fr: 'fr', de: 'de', es: 'es', it: 'it', pt: 'pt', nl: 'nl',
+  sv: 'se', no: 'no', fi: 'fi', et: 'ee', pl: 'pl', ru: 'ru', uk: 'ua',
+  be: 'by', bg: 'bg', sr: 'rs', mk: 'mk', ro: 'ro', hu: 'hu', el: 'gr',
+  he: 'il', hy: 'am', fa: 'ir', ur: 'pk', ar: 'sa', ja: 'jp', zh: 'cn',
+  id: 'id', bn: 'bd', eo: 'eo',
+  // Ten editions of Indic languages share one flag, which is why every entry
+  // also carries its own script underneath: those are what tell them apart.
+  hi: 'in', ta: 'in', te: 'in', ml: 'in', kn: 'in', mr: 'in',
+  gu: 'in', pa: 'in', or: 'in', as: 'in', sa: 'in',
+};
+
 export const WIKIPEDIA_LANGUAGES = [
   { code: 'en', name: 'English', native: 'English', flag: '🇬🇧' },
   { code: 'fr', name: 'French', native: 'Français', flag: '🇫🇷' },
@@ -591,23 +650,23 @@ export const WIKIPEDIA_LANGUAGES = [
   { code: 'hy', name: 'Armenian', native: 'Հայերեն', flag: '🇦🇲' },
   { code: 'fa', name: 'Persian', native: 'فارسی', flag: '🇮🇷' },
   { code: 'ur', name: 'Urdu', native: 'اردو', flag: '🇵🇰' },
-  { code: 'ar', name: 'Arabic', native: 'العربية', flag: '' },
+  { code: 'ar', name: 'Arabic', native: 'العربية', flag: '🇸🇦' },
   { code: 'ja', name: 'Japanese', native: '日本語', flag: '🇯🇵' },
   { code: 'zh', name: 'Chinese', native: '中文', flag: '🇨🇳' },
   { code: 'id', name: 'Indonesian', native: 'Bahasa Indonesia', flag: '🇮🇩' },
   { code: 'hi', name: 'Hindi', native: 'हिन्दी', flag: '🇮🇳' },
   { code: 'bn', name: 'Bengali', native: 'বাংলা', flag: '🇧🇩' },
-  { code: 'ta', name: 'Tamil', native: 'தமிழ்', flag: '' },
-  { code: 'te', name: 'Telugu', native: 'తెలుగు', flag: '' },
-  { code: 'ml', name: 'Malayalam', native: 'മലയാളം', flag: '' },
-  { code: 'kn', name: 'Kannada', native: 'ಕನ್ನಡ', flag: '' },
-  { code: 'mr', name: 'Marathi', native: 'मराठी', flag: '' },
-  { code: 'gu', name: 'Gujarati', native: 'ગુજરાતી', flag: '' },
-  { code: 'pa', name: 'Punjabi', native: 'ਪੰਜਾਬੀ', flag: '' },
-  { code: 'or', name: 'Odia', native: 'ଓଡ଼ିଆ', flag: '' },
-  { code: 'as', name: 'Assamese', native: 'অসমীয়া', flag: '' },
-  { code: 'sa', name: 'Sanskrit', native: 'संस्कृतम्', flag: '' },
-  { code: 'eo', name: 'Esperanto', native: 'Esperanto', flag: '' },
+  { code: 'ta', name: 'Tamil', native: 'தமிழ்', flag: '🇮🇳' },
+  { code: 'te', name: 'Telugu', native: 'తెలుగు', flag: '🇮🇳' },
+  { code: 'ml', name: 'Malayalam', native: 'മലയാളം', flag: '🇮🇳' },
+  { code: 'kn', name: 'Kannada', native: 'ಕನ್ನಡ', flag: '🇮🇳' },
+  { code: 'mr', name: 'Marathi', native: 'मराठी', flag: '🇮🇳' },
+  { code: 'gu', name: 'Gujarati', native: 'ગુજરાતી', flag: '🇮🇳' },
+  { code: 'pa', name: 'Punjabi', native: 'ਪੰਜਾਬੀ', flag: '🇮🇳' },
+  { code: 'or', name: 'Odia', native: 'ଓଡ଼ିଆ', flag: '🇮🇳' },
+  { code: 'as', name: 'Assamese', native: 'অসমীয়া', flag: '🇮🇳' },
+  { code: 'sa', name: 'Sanskrit', native: 'संस्कृतम्', flag: '🇮🇳' },
+  { code: 'eo', name: 'Esperanto', native: 'Esperanto', flag: '🌍' },
 ];
 
 export const WIKIPEDIA_LANGS = {

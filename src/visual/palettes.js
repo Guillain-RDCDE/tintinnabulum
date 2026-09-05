@@ -222,7 +222,7 @@ export const PALETTES = {
   },
 };
 
-export const DEFAULT_PALETTE_NAME = 'nocturne';
+export const DEFAULT_PALETTE_NAME = 'blueprint';
 
 /** Accepts a palette name or a colours object; always returns a full set. */
 export function resolvePalette(nameOrColors) {

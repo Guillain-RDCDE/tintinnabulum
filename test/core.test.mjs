@@ -302,5 +302,74 @@ ok('rotation actually rotates the path', (() => {
 
 ok('ring is the hollow one', isHollow('ring') && !isHollow('circle'));
 
+// --- polled feeds must trickle, not dump -------------------------------
+// A poller that emits its whole page at once produces one blurred chord --
+// most of it dropped, there being only so many voices -- then a long silence.
+// It sounds broken even though the data is fine.
+
+const { pollSource } = await import('../src/sources/index.js');
+
+const BATCH = Array.from({ length: 20 }, (_, i) => ({ magnitude: 10 + i, id: 'batch-' + i }));
+const realFetch = globalThis.fetch;
+globalThis.fetch = async () => ({ ok: true, json: async () => BATCH });
+
+const paced = await new Promise((resolve) => {
+  const stamps = [];
+  const src = pollSource({
+    url: 'https://example.invalid/feed',
+    interval: 2000,
+    map: (b) => b,
+    name: 'spread-test',
+  });
+  const t0 = Date.now();
+  src.start(() => stamps.push(Date.now() - t0));
+  setTimeout(() => {
+    src.stop();
+    resolve(stamps);
+  }, 1200);
+});
+ok('a polled batch is not delivered all at once', new Set(paced).size > 1,
+   `${paced.length} events across ${new Set(paced).size} moments`);
+ok('a polled batch starts arriving immediately', paced.length > 0 && paced[0] < 300,
+   'first at ' + paced[0] + 'ms');
+ok('the batch is paced, not dumped',
+   paced.length > 1 && paced[paced.length - 1] - paced[0] > 300,
+   `spanned ${paced[paced.length - 1] - paced[0]}ms`);
+
+const afterStop = await new Promise((resolve) => {
+  let count = 0;
+  const src = pollSource({ url: 'https://example.invalid/feed', interval: 2000, map: (b) => b, name: 'stop-test' });
+  src.start(() => count++);
+  setTimeout(() => {
+    src.stop();
+    const atStop = count;
+    setTimeout(() => resolve({ atStop, later: count }), 700);
+  }, 250);
+});
+ok('stopping a poller cancels its pending deliveries',
+   afterStop.later === afterStop.atStop,
+   `${afterStop.atStop} at stop, ${afterStop.later} after`);
+
+const unspread = await new Promise((resolve) => {
+  const stamps = [];
+  const src = pollSource({
+    url: 'https://example.invalid/feed',
+    interval: 2000,
+    map: (b) => b,
+    name: 'unspread-test',
+    spread: false,
+  });
+  const t0 = Date.now();
+  src.start(() => stamps.push(Date.now() - t0));
+  setTimeout(() => {
+    src.stop();
+    resolve(stamps);
+  }, 400);
+});
+ok('spreading can still be turned off', unspread.length === 20 && new Set(unspread).size <= 2,
+   `${unspread.length} events across ${new Set(unspread).size} moments`);
+
+globalThis.fetch = realFetch;
+
 console.log(fails ? `\n${fails} FAILURE(S)` : '\nall core checks passed');
 process.exit(fails ? 1 : 0);
