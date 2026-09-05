@@ -11,7 +11,31 @@ export class AudioSink {
     this.kit = opts.kit || {}; // { add, sub, neutral, accent }
     this.byCategory = opts.byCategory || {}; // { bot: Instrument, ... }
     this.enabled = opts.enabled !== false;
+    // bpm 0 means free time: notes sound the instant their event arrives.
+    this.tempo = { bpm: 0, division: 8, ...(opts.tempo || {}) };
     this.stats = { played: 0, dropped: 0 };
+  }
+
+  /**
+   * Snap note onsets to a tempo grid.
+   *
+   * Events arrive whenever the world produces them, which is by definition
+   * arrhythmic. Holding each note until the next subdivision turns the same
+   * stream into something metrical -- the single biggest change available to
+   * how musical this sounds. A note waits at most one subdivision, so at a
+   * slow tempo the picture leads the sound slightly; that is the trade.
+   */
+  setTempo(bpm, division = this.tempo.division) {
+    this.tempo = { bpm: Math.max(0, Number(bpm) || 0), division: Number(division) || 8 };
+    return this;
+  }
+
+  _onset(ctx) {
+    const { bpm, division } = this.tempo;
+    if (!bpm) return 0; // 0 tells the instrument to start immediately
+    const step = (60 / bpm) * (4 / division);
+    // The small guard keeps us from ever scheduling a beat already gone by.
+    return Math.ceil((ctx.currentTime + 0.004) / step) * step;
   }
 
   setKit(kit) {
@@ -113,9 +137,11 @@ export class AudioSink {
     const ctx = this.engine.ctx;
     const dest = this.engine.destination;
 
+    const when = this._onset(ctx);
+
     if (ev.accent && this.kit.accent) {
       try {
-        this.kit.accent.play(ctx, dest, { semitone: ev.map.semitone, velocity: 1 });
+        this.kit.accent.play(ctx, dest, { semitone: ev.map.semitone, velocity: 1, when });
       } catch (e) {
         console.warn('accent failed', e);
       }
@@ -135,6 +161,7 @@ export class AudioSink {
       voice = inst.play(ctx, dest, {
         semitone: ev.map.semitone,
         velocity: ev.map.velocity,
+        when,
       });
     } catch (e) {
       console.warn('instrument failed', e);

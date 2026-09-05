@@ -1,7 +1,7 @@
 // Public surface.
 export { Sonifier } from './core/sonifier.js';
 export { normalize, unitPosition, rngFrom } from './core/event.js';
-export { Mapper, SCALES } from './core/mapper.js';
+export { Mapper, SCALES, KEYS } from './core/mapper.js';
 export { VoicePool } from './core/voices.js';
 
 export { AudioEngine } from './audio/engine.js';

@@ -93,17 +93,46 @@ ok('root returned 200', rootResp && rootResp.ok());
 await page.waitForFunction(() => window.son, null, { timeout: 15000 });
 ok('engine is exposed on the page', true);
 
-// --- simple mode is what a newcomer lands on ----------------------------
-ok('simple view is shown first', await page.locator('#simple').isVisible());
-ok('the advanced panel is hidden until asked for', await page.locator('#advanced').isHidden());
-ok('there is a single obvious start button', await page.locator('#start').isVisible());
-ok('the palette picker is reachable without going advanced',
-   (await page.locator('#palettes-simple .pal').count()) >= 8);
+// --- one surface, progressively disclosed --------------------------------
+// There used to be a "simple" and an "advanced" screen that duplicated most
+// controls, with the same setting offered two different ways. Now every
+// setting exists exactly once, and the deeper ones are revealed in place.
+const openMore = async (sel) => {
+  await page.evaluate((s) => {
+    const d = document.querySelector(s);
+    if (d && !d.open) d.open = true;
+  }, sel);
+};
 
-// Everything below drives the full control panel.
-await page.click('#to-advanced');
-ok('the advanced panel opens on request', await page.locator('#advanced').isVisible());
-ok('simple view steps aside in advanced mode', await page.locator('#simple').isHidden());
+for (const sec of ['#sec-listen', '#sec-sound', '#sec-look', '#sec-filter', '#sec-activity']) {
+  ok(`${sec.replace('#sec-', '')} is on the page from the start`,
+     await page.locator(sec).isVisible());
+}
+ok('there is a single obvious start button', await page.locator('#start').isVisible());
+ok('the essentials need no digging',
+   (await page.locator('#feeds .card').count()) >= 6 &&
+   (await page.locator('#kits .card').count()) >= 6 &&
+   (await page.locator('#palettes .sw').count()) >= 8);
+
+const disclosures = await page.evaluate(() =>
+  [...document.querySelectorAll('details.more')].map((d) => ({ id: d.id, open: d.open }))
+);
+ok('advanced options exist but stay folded away', disclosures.length >= 4 && disclosures.every((d) => !d.open),
+   disclosures.map((d) => d.id).join(', '));
+
+// The duplication that made the old interface confusing must not come back.
+const dupes = await page.evaluate(() => {
+  const ids = [...document.querySelectorAll('[id]')].map((e) => e.id);
+  const seen = new Set();
+  const dup = new Set();
+  for (const id of ids) (seen.has(id) ? dup : seen).add(id);
+  const controls = [...document.querySelectorAll('[data-feed],[data-kit],[data-palette],[data-shape],[data-lang]')];
+  const keys = controls.map((c) => JSON.stringify(c.dataset));
+  const dupControls = keys.length - new Set(keys).size;
+  return { dupIds: [...dup], dupControls };
+});
+ok('no element id appears twice', dupes.dupIds.length === 0, dupes.dupIds.join(', '));
+ok('no control is offered in two places', dupes.dupControls === 0, dupes.dupControls + ' duplicated');
 
 // --- unlock + sample decoding -------------------------------------------
 const unlocked = await page.evaluate(async () => {
@@ -327,7 +356,7 @@ ok('polyphony is limited under flood', flood.limited > 0, 'stolen+denied=' + flo
 ok('voice count stays bounded under flood', flood.active <= 16, 'active=' + flood.active);
 
 // --- palette picker -----------------------------------------------------
-const swatchCount = await page.locator('#palettes .pal').count();
+const swatchCount = await page.locator('#palettes .sw').count();
 ok('every palette has a swatch in the picker', swatchCount >= 8, swatchCount + ' swatches');
 
 const groundOf = () =>
@@ -338,7 +367,7 @@ const groundOf = () =>
   });
 
 const beforeGround = await groundOf();
-await page.click('#palettes .pal[data-palette="daylight"]');
+await page.click('#palettes .sw[data-palette="daylight"]');
 await page.waitForTimeout(120);
 const afterGround = await groundOf();
 ok('choosing a palette repaints the canvas ground', beforeGround !== afterGround,
@@ -359,7 +388,7 @@ ok('circles already on screen are recoloured by a palette change',
 ok('the sink reports the palette it is using', recoloured.name === 'ultraviolet', recoloured.name);
 
 // The choice must survive a reload, and must not break when storage is denied.
-await page.click('#palettes .pal[data-palette="bronze"]');
+await page.click('#palettes .sw[data-palette="bronze"]');
 await page.waitForTimeout(100);
 await page.reload({ waitUntil: 'networkidle' });
 await page.waitForFunction(() => window.son, null, { timeout: 15000 });
@@ -403,12 +432,10 @@ ok('the title links back to the repository', homeHref === REPO, String(homeHref)
 ok('there is a visible source link too', srcHref === REPO, String(srcHref));
 
 // --- shape picker --------------------------------------------------------
-const shapeCountAdv = await page.locator('#shapes .shp').count();
-const shapeCountSimple = await page.locator('#shapes-simple .shp').count();
-ok('shapes are offered in both views', shapeCountAdv >= 7 && shapeCountAdv === shapeCountSimple,
-   `${shapeCountAdv} / ${shapeCountSimple}`);
+const shapeCount = await page.locator('#shapes .sw').count();
+ok('every shape has a swatch', shapeCount >= 8, shapeCount + ' shapes');
 ok('the shape swatches are drawn, not empty', await page.evaluate(() => {
-  const cv = document.querySelector('#shapes .shp canvas');
+  const cv = document.querySelector('#shapes .sw canvas');
   const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
   let lit = 0;
   for (let i = 3; i < d.length; i += 4 * 41) if (d[i] > 10) lit++;
@@ -418,7 +445,7 @@ ok('the shape swatches are drawn, not empty', await page.evaluate(() => {
 // Draw one event of known identity, snapshot, change shape, redraw, compare.
 // Same id and same delay, so only the geometry differs between the two.
 const renderWith = async (shape) => {
-  await page.click(`#shapes .shp[data-shape="${shape}"]`);
+  await page.click(`#shapes .sw[data-shape="${shape}"]`);
   return page.evaluate(async () => {
     const sink = window.son.sinks.find((s) => s.particles);
     sink.clear();
@@ -452,6 +479,7 @@ const emptyGround = async () =>
     return sum;
   });
 const plainGround = await emptyGround();
+await openMore('#more-look');
 await page.check('#starfield');
 const starryGround = await emptyGround();
 // Not merely "different": the sky has to be visible, so require a real change
@@ -461,32 +489,30 @@ ok('the starry sky is plainly visible on an empty canvas', starDelta > 0.004,
    `${(starDelta * 100).toFixed(2)}% change`);
 ok('the sink records the starfield setting',
    (await page.evaluate(() => window.son.sinks.find((s) => s.particles).starfield)) === true);
-ok('both views share one starfield control',
-   await page.isChecked('#starfield-simple'));
 await page.uncheck('#starfield');
 
 // --- feed and language pickers ------------------------------------------
 // The pickers are exercised, not the remote feeds: asserting on live Bitcoin
 // or GitHub traffic would make this suite fail for reasons that have nothing
 // to do with the code.
-await page.click('#to-simple');
-
-const feedCount = await page.locator('#feeds-simple .feed').count();
+const feedCount = await page.locator('#feeds .card').count();
 ok('several live feeds are offered', feedCount >= 6, feedCount + ' feeds');
 
-await page.click('#feeds-simple .feed[data-feed="earthquakes"]');
+await page.click('#feeds .card[data-feed="earthquakes"]');
 ok('choosing a feed renames the start button',
    /earthquakes/i.test(await page.textContent('#start')),
    await page.textContent('#start'));
 ok('choosing a feed explains what it is',
    (await page.textContent('#feed-note')).length > 40);
-ok('the advanced selector follows the simple picker',
-   (await page.inputValue('#source')) === 'earthquakes');
+ok('the chosen feed is the one shown as chosen',
+   (await page.getAttribute('#feeds .card[data-feed="earthquakes"]', 'aria-pressed')) === 'true');
 ok('editions are hidden for a feed that has none',
    await page.locator('#langs-wrap').isHidden());
 
-await page.click('#feeds-simple .feed[data-feed="eventstreams"]');
+await page.click('#feeds .card[data-feed="wikipedia"]');
 ok('editions come back for Wikipedia', await page.locator('#langs-wrap').isVisible());
+ok('the ingest URL only appears for the ingest feed',
+   await page.locator('#ingest-wrap').isHidden());
 
 const langCount = await page.locator('#langs-grid .lang').count();
 ok('every Wikipedia edition has a button', langCount >= 40, langCount + ' editions');
@@ -529,11 +555,17 @@ ok('no two editions are labelled the same', flagInfo.distinctNames === flagInfo.
 ok('every edition is labelled in its own language', flagInfo.named);
 ok('hovering names the language in full', flagInfo.titled);
 
+await openMore('#more-listen');
 await page.click('#langs-grid .lang[data-lang="fr"]');
-ok('adding an edition updates the raw field',
+ok('clicking a flag updates the typed field: one setting, two ways in',
    (await page.inputValue('#langs')).split(',').includes('fr'),
    await page.inputValue('#langs'));
-await page.click('#langs-grid .lang[data-lang="fr"]');
+await page.fill('#langs', 'en,de,ja');
+await page.dispatchEvent('#langs', 'change');
+ok('typing codes updates the flags in turn',
+   (await page.getAttribute('#langs-grid .lang[data-lang="ja"]', 'aria-pressed')) === 'true');
+await page.click('#langs-grid .lang[data-lang="de"]');
+await page.click('#langs-grid .lang[data-lang="ja"]');
 await page.click('#langs-grid .lang[data-lang="en"]');
 ok('deselecting everything falls back to English rather than nothing',
    (await page.inputValue('#langs')) === 'en', await page.inputValue('#langs'));
@@ -563,9 +595,8 @@ ok('every new source builds and exposes the source interface',
    Object.values(factories).every((f) => f.hasStart && f.hasStop),
    JSON.stringify(factories));
 
-await page.click('#to-advanced');
-
 // --- recorder -----------------------------------------------------------
+await openMore('#more-sound');
 const rec = await page.evaluate(async () => {
   const { Recorder } = await import('../src/audio/recorder-sink.js');
   if (!Recorder.supported) return { supported: false };
@@ -587,9 +618,12 @@ if (rec.supported) {
 
 // --- ingest server -> browser, end to end -------------------------------
 if (USE_LOCAL_SERVER) {
-  await page.selectOption('#source', 'ingest');
+  await page.click('#feeds .card[data-feed="ingest"]');
+  ok('the ingest URL field appears with the ingest feed',
+     await page.locator('#ingest-wrap').isVisible());
   await page.fill('#ingest-url', BASE + '/events');
-  await page.click('#connect');
+  if ((await page.getAttribute('#start', 'data-on')) === 'true') await page.click('#start');
+  await page.click('#start');
   // Wait for the stream to be open rather than for a fixed delay: the connect
   // handler prepares audio first, and how long that takes is not this test's
   // business.
@@ -633,7 +667,8 @@ mp.on('pageerror', (e) => mobileErrors.push(e.message));
 await mp.goto(BASE + '/demo/', { waitUntil: 'networkidle' });
 await mp.waitForFunction(() => window.son, null, { timeout: 15000 });
 
-ok('phone: simple view is what loads', await mp.locator('#simple').isVisible());
+ok('phone: the essentials are on screen without digging',
+   (await mp.locator('#feeds .card').count()) >= 6 && (await mp.locator('#kits .card').count()) >= 6);
 ok('phone: the start button is reachable without scrolling sideways',
    await mp.locator('#start').isVisible());
 

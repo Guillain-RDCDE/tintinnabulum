@@ -208,6 +208,16 @@ export const SYNTH_PRESETS = {
   kalimba: { engine: 'fm', wave: 'triangle', ratio: 2.03, index: 60, indexDecay: 0.12, attack: 0.002, decay: 0.9 },
   // Big, slow, and deliberately inharmonic so it never settles on a pitch.
   gong: { engine: 'fm', wave: 'sine', ratio: 1.73, index: 480, indexDecay: 1.2, attack: 0.01, decay: 4.2 },
+
+  // A tube rather than a bar: a high odd ratio and a long tail.
+  chime: { engine: 'fm', wave: 'sine', ratio: 5.41, index: 260, indexDecay: 0.5, attack: 0.004, decay: 3.4 },
+  // Struck oil drum: a low-order ratio keeps the partials nearly harmonic,
+  // which is why a steel pan sings where a gong clangs.
+  steelpan: { engine: 'fm', wave: 'sine', ratio: 2.5, index: 150, indexDecay: 0.18, attack: 0.003, decay: 1.3 },
+  // Plucked gut: bright attack, quick fall, no metallic ring at all.
+  harp: { engine: 'sub', wave: 'sawtooth', attack: 0.002, decay: 1.0, cutoff: 3200, cutoffDecay: 0.4, q: 2 },
+  // Weight underneath everything else.
+  bass: { engine: 'sub', wave: 'triangle', attack: 0.004, decay: 0.9, cutoff: 700, cutoffDecay: 0.3, q: 3 },
 };
 
 export class SynthInstrument extends Instrument {
@@ -391,6 +401,21 @@ export const KITS = {
     label: 'Glass',
     note: 'Long, clear and ringing. Turns a busy feed into a wash.',
     make: trio('glass', 'blip', 'pad'),
+  },
+  chimes: {
+    label: 'Wind chimes',
+    note: 'Tubes rather than bars, with a long tail. Best on a slow feed.',
+    make: trio('chime', 'harp', 'glass'),
+  },
+  steelpan: {
+    label: 'Steel pan',
+    note: 'Nearly harmonic partials, so it sings where a gong clangs.',
+    make: trio('steelpan', 'wood', 'gong'),
+  },
+  strings: {
+    label: 'Plucked strings',
+    note: 'Harp above, deep pizzicato below. The warmest of the set.',
+    make: trio('harp', 'bass', 'pad'),
   },
 };
 

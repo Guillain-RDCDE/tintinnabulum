@@ -36,11 +36,11 @@ somewhere in the world, at that moment.
 That is the whole idea. It is designed to be left running in a background tab,
 and it works on a phone.
 
-The sandbox opens in a simple view: one button, the colour palettes, and
-nothing else. **Advanced settings** reveals the full panel — sources, languages,
-instruments, scales, filters, recording — and the choice is remembered. If you
-would rather not listen to Wikipedia, choose **Synthetic traffic** there for a
-stream of generated events. To hear your own data, see
+The sandbox is one page, not two. Four sections — **Listen to**, **Sound**,
+**Look**, **Filter** — each showing its essentials, with an **Advanced**
+disclosure that reveals the rest in place. Every setting exists exactly once.
+If you would rather not listen to Wikipedia, there are seven other feeds in the
+first section. To hear your own data, see
 [Sending your own data](#sending-your-own-data) — it is one `curl` command.
 
 For an explanation of what actually happens between the live feed and the note
@@ -102,6 +102,28 @@ son.connect(wikipedia({ langs: ['en', 'fr'] }));
 
 son.emit({ magnitude: 512, id: 'anything', category: 'alert' });
 ```
+
+### Musical rules
+
+Four controls decide how a stream of numbers becomes music, all under
+**Sound → Advanced**:
+
+| Control | Effect |
+|---|---|
+| **Scale** | 19 of them — modes, pentatonics, blues, whole-tone, octatonic, the Japanese *hirajoshi*, *in-sen* and *kumoi*, plus bare fourths, fifths and octaves. Pitches are snapped to the chosen set, so nothing can land outside it. |
+| **Key** | Transposes the whole thing. |
+| **Humanise** | Up to ±2 semitones of wobble, so repeated values stop sounding mechanical. |
+| **Tempo** | The largest change of the four. Events arrive whenever the world produces them, which is arrhythmic by definition; setting a tempo holds each note until the next quarter, eighth or sixteenth. The same data becomes metrical. |
+
+```js
+son.mapper.setScale('hirajoshi');
+son.mapper.root = 5;          // transpose to F
+son.mapper.jitter = 0.8;      // semitones of humanising
+son.audio.setTempo(96, 8);    // eighth notes at 96bpm; 0 for free time
+```
+
+Quantising costs a little synchronisation: a note waits at most one
+subdivision, so at a slow tempo the picture leads the sound slightly.
 
 ### Pitch that calibrates itself
 
@@ -196,7 +218,7 @@ nothing beyond `node:http`.
 Implement `load(ctx)` and `play(ctx, dest, {semitone, velocity})` and you have a
 new instrument.
 
-Seven kits ship, selectable at runtime:
+Ten kits ship, selectable at runtime:
 
 | Kit | Sound |
 |---|---|
@@ -207,9 +229,12 @@ Seven kits ship, selectable at runtime:
 | **Marimba** | Tuned wooden bars, the least tiring over a long session |
 | **Gongs** | Large, slow, deliberately inharmonic. Best with a sparse feed |
 | **Glass** | Long and ringing; turns a busy feed into a wash |
+| **Wind chimes** | Tubes rather than bars, with a long tail |
+| **Steel pan** | Nearly harmonic partials, so it sings where a gong clangs |
+| **Plucked strings** | Harp above, deep pizzicato below. The warmest of the set |
 
-Only the first uses audio files. **The other six are pure synthesis: nothing to
-download, nothing to license, and they work offline.**
+Only the first uses audio files. **The other nine are pure synthesis: nothing
+to download, nothing to license, and they work offline.**
 
 - `SampleInstrument` plays recorded banks, resampled through `playbackRate`, so
   pitch is continuous rather than limited to the number of recorded notes.

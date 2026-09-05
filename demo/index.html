@@ -4,130 +4,172 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Tintinnabulum — sandbox</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%231c2733'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%23e8b44a'/%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='%23e8b44a' stroke-opacity='.5' stroke-width='1.5'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2304141c'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2339b7a8'/%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='%2339b7a8' stroke-opacity='.5' stroke-width='1.5'/%3E%3C/svg%3E">
 <style>
   :root {
-    --bg: #f6f6f4; --fg: #1c2733; --line: #dde3e8; --accent: #9a6b12; --warn: #b3401f;
-    --muted: #6b7a88;
+    --bg: #f5f5f7;
+    --surface: #fff;
+    --fg: #1d1d1f;
+    --muted: #6e6e73;
+    --line: #e3e3e6;
+    --line-strong: #d0d0d5;
+    --accent: #0071e3;
+    --warn: #c1341b;
+    --ok: #1d7a3e;
+    --r-card: 14px;
+    --r-ctl: 10px;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; }
-  body { font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--fg); }
-
-  header { display: flex; align-items: baseline; gap: .8em; padding: .7em 1em; flex-wrap: wrap; }
-  h1 { font-size: 1.15rem; margin: 0; letter-spacing: .01em; }
-  header .tag { color: var(--muted); font-size: .88rem; }
-  h1 a { color: inherit; text-decoration: none; border-bottom: 1px solid transparent; }
-  h1 a:hover { border-bottom-color: var(--accent); color: var(--accent); }
-  header .src { color: var(--accent); text-decoration: none; border-bottom: 1px solid currentColor; }
-
-  #stage { position: relative; }
-  /* matches the default palette, so there is no flash before the first paint */
-  canvas { display: block; width: 100%; height: 58vh; background: #04141c; touch-action: manipulation; }
-  #unlock { position: absolute; inset: 0; display: none; place-items: center; text-align: center;
-            background: rgba(28,39,51,.74); color: #fff; cursor: pointer; padding: 1em; }
-  #unlock.show { display: grid; }
-  #unlock span { font-size: 1.25rem; animation: pulse 2s ease-in-out infinite; }
-  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .45 } }
-
-  .wrap { max-width: 1200px; margin: 0 auto; padding: 1em; }
-
-  /* ---- simple mode ---- */
-  #simple .primary {
-    display: block; width: 100%; padding: .85em 1em; font: 600 1.05rem/1.2 inherit;
-    color: #fff; background: #1c2733; border: none; border-radius: 8px; cursor: pointer;
-    min-height: 52px;
+  body {
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: var(--bg); color: var(--fg);
+    -webkit-font-smoothing: antialiased;
   }
-  #simple .primary:hover { background: #2a3a4b; }
-  #simple .primary[data-on="true"] { background: var(--warn); }
-  #audio-status { display: block; margin-top: .6em; font-size: .9rem; color: var(--muted); min-height: 1.4em; }
+  h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -0.01em; }
+
+  /* ---------- header ---------- */
+  header {
+    display: flex; align-items: baseline; gap: .75rem; flex-wrap: wrap;
+    padding: .8rem 1.25rem; background: rgba(255,255,255,.72);
+    backdrop-filter: saturate(180%) blur(16px);
+    border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5;
+  }
+  h1 { font-size: 1.0625rem; }
+  h1 a { color: inherit; text-decoration: none; }
+  h1 a:hover { color: var(--accent); }
+  header .sub { color: var(--muted); font-size: .8125rem; }
+  header .spacer { flex: 1 1 auto; }
+  header a.src { color: var(--accent); text-decoration: none; font-size: .8125rem; }
+  header a.src:hover { text-decoration: underline; }
+  #stat { color: var(--muted); font-size: .75rem; font-variant-numeric: tabular-nums; }
+
+  /* ---------- stage ---------- */
+  #stage { position: relative; }
+  canvas { display: block; width: 100%; height: 56vh; background: #04141c; touch-action: manipulation; }
+  #unlock {
+    position: absolute; inset: 0; display: none; place-items: center; text-align: center;
+    background: rgba(4,20,28,.72); color: #fff; cursor: pointer; padding: 1rem;
+    backdrop-filter: blur(2px);
+  }
+  #unlock.show { display: grid; }
+  #unlock span { font-size: 1.1875rem; font-weight: 500; animation: pulse 2.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .5 } }
+
+  /* ---------- layout ---------- */
+  main { max-width: 940px; margin: 0 auto; padding: 1.25rem 1.25rem 4rem; }
+
+  .hero { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; margin-bottom: 1.75rem; }
+  #start {
+    flex: 1 1 260px; min-height: 50px; padding: .8rem 1.25rem;
+    font: 600 1.0625rem/1.2 inherit; color: #fff; background: var(--accent);
+    border: none; border-radius: var(--r-ctl); cursor: pointer;
+    transition: background .15s ease, transform .1s ease;
+  }
+  #start:hover { background: #0063c8; }
+  #start:active { transform: scale(.99); }
+  #start[data-on="true"] { background: var(--warn); }
+  #audio-status { flex: 1 1 240px; color: var(--muted); font-size: .875rem; }
   #audio-status[data-state="bad"] { color: var(--warn); }
-  #audio-status[data-state="good"] { color: #2f7d32; }
-  .explain { margin: 1.1em 0 0; color: var(--fg); }
-  .explain li { margin: .3em 0; }
-  .section-label { font-size: .78rem; text-transform: uppercase; letter-spacing: .07em;
-                   color: var(--muted); margin: 1.4em 0 .1em; font-weight: 600; }
+  #audio-status[data-state="good"] { color: var(--ok); }
 
-  /* ---- shared: palette picker ---- */
-  .palette-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: .55em; margin-top: .5em; }
-  .pal { border: 2px solid transparent; border-radius: 8px; padding: 0; background: none; cursor: pointer;
-         transition: transform .12s ease, border-color .12s ease; }
-  .pal:hover { transform: translateY(-2px); border-color: #c9d3dc; }
-  .pal .chip { position: relative; display: flex; align-items: center; justify-content: center; gap: 4px;
-               height: 42px; border-radius: 6px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.18); }
-  .pal .chip i { width: 9px; height: 9px; border-radius: 50%; }
-  .pal small { display: block; margin-top: .25em; font-size: .7rem; color: var(--muted); text-align: center; }
-  .pal[aria-pressed="true"] { border-color: var(--accent); }
-  .pal[aria-pressed="true"] small { color: var(--accent); font-weight: 600; }
-  .pal[aria-pressed="true"] .chip::after { content: "✓"; position: absolute; right: 5px; bottom: 1px;
-                                           font-size: .72rem; color: #fff; text-shadow: 0 0 3px rgba(0,0,0,.9); }
+  section { background: var(--surface); border: 1px solid var(--line);
+            border-radius: var(--r-card); padding: 1.1rem 1.25rem 1.25rem; margin-bottom: 1rem; }
+  section > h2 { font-size: .75rem; text-transform: uppercase; letter-spacing: .07em;
+                 color: var(--muted); margin-bottom: .85rem; }
+  .note { color: var(--muted); font-size: .8125rem; margin: .75rem 0 0; min-height: 1.2em; }
+  .sub-label { font-size: .75rem; text-transform: uppercase; letter-spacing: .06em;
+               color: var(--muted); font-weight: 600; margin: 1.25rem 0 .1rem; }
 
-  /* ---- shared: shape picker ---- */
-  .shape-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: .55em; margin-top: .5em; }
-  .shp { border: 2px solid transparent; border-radius: 8px; padding: 0; background: none; cursor: pointer;
-         transition: transform .12s ease, border-color .12s ease; }
-  .shp:hover { transform: translateY(-2px); border-color: #c9d3dc; }
-  .shp canvas { display: block; width: 100%; height: 42px; border-radius: 6px; background: #1c2733;
-                box-shadow: inset 0 0 0 1px rgba(0,0,0,.18); }
-  .shp small { display: block; margin-top: .25em; font-size: .7rem; color: var(--muted); text-align: center; }
-  .shp[aria-pressed="true"] { border-color: var(--accent); }
-  .shp[aria-pressed="true"] small { color: var(--accent); font-weight: 600; }
+  /* ---------- disclosure ---------- */
+  details.more { margin-top: 1.1rem; border-top: 1px solid var(--line); padding-top: .35rem; }
+  details.more > summary {
+    list-style: none; cursor: pointer; color: var(--accent); font-size: .875rem;
+    padding: .5rem 0; display: flex; align-items: center; gap: .4rem; user-select: none;
+    min-height: 40px;
+  }
+  details.more > summary::-webkit-details-marker { display: none; }
+  details.more > summary::before {
+    content: ""; width: 6px; height: 6px; border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor; transform: rotate(-45deg);
+    transition: transform .18s ease; margin-left: 2px;
+  }
+  details.more[open] > summary::before { transform: rotate(45deg); }
+  .more-body { padding: .35rem 0 .25rem; display: grid; gap: 1rem;
+               grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
 
-  /* ---- feed and language pickers ---- */
-  .feed-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: .5em; margin-top: .5em; }
-  .feed { border: 1px solid var(--line); border-radius: 8px; background: #fff; cursor: pointer;
-          padding: .6em .7em; text-align: left; font: inherit; color: var(--fg); min-height: 46px;
-          transition: border-color .12s ease, transform .12s ease; }
-  .feed:hover { border-color: var(--accent); transform: translateY(-1px); }
-  .feed[aria-pressed="true"] { border-color: var(--accent); border-width: 2px; padding: calc(.6em - 1px) calc(.7em - 1px); }
-  .feed b { display: block; font-size: .92rem; font-weight: 600; }
-  .feed span { display: block; font-size: .74rem; color: var(--muted); margin-top: .1em; }
-  .feed[aria-pressed="true"] b { color: var(--accent); }
+  /* ---------- cards ---------- */
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(136px, 1fr)); gap: .55rem; }
+  .card {
+    border: 1px solid var(--line-strong); border-radius: var(--r-ctl); background: var(--surface);
+    cursor: pointer; padding: .65rem .7rem; text-align: left; font: inherit; color: var(--fg);
+    min-height: 52px; transition: border-color .15s ease, box-shadow .15s ease, transform .1s ease;
+  }
+  .card:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .card:active { transform: translateY(0); }
+  .card b { display: block; font-size: .9375rem; font-weight: 600; }
+  .card span { display: block; font-size: .75rem; color: var(--muted); margin-top: .1rem; }
+  .card[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .card[aria-pressed="true"] b { color: var(--accent); }
 
-  .lang-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: .45em; margin-top: .5em; }
-  .lang { border: 1px solid var(--line); border-radius: 7px; background: #fff; cursor: pointer;
-          padding: .4em .2em; font: inherit; color: var(--fg); min-height: 52px; text-align: center;
-          transition: border-color .12s ease, transform .12s ease; }
+  /* ---------- swatches ---------- */
+  .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: .55rem; }
+  .sw { border: 2px solid transparent; border-radius: var(--r-ctl); padding: 0; background: none;
+        cursor: pointer; transition: transform .12s ease, border-color .12s ease; }
+  .sw:hover { transform: translateY(-2px); border-color: var(--line-strong); }
+  .sw .chip { position: relative; display: flex; align-items: center; justify-content: center; gap: 4px;
+              height: 42px; border-radius: 7px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.14); }
+  .sw .chip i { width: 9px; height: 9px; border-radius: 50%; }
+  .sw canvas { display: block; width: 100%; height: 42px; border-radius: 7px;
+               box-shadow: inset 0 0 0 1px rgba(0,0,0,.14); }
+  .sw small { display: block; margin-top: .25rem; font-size: .6875rem; color: var(--muted); text-align: center; }
+  .sw[aria-pressed="true"] { border-color: var(--accent); }
+  .sw[aria-pressed="true"] small { color: var(--accent); font-weight: 600; }
+  .sw[aria-pressed="true"] .chip::after { content: "✓"; position: absolute; right: 5px; bottom: 1px;
+                                          font-size: .6875rem; color: #fff; text-shadow: 0 0 3px rgba(0,0,0,.9); }
+
+  /* ---------- editions ---------- */
+  .langs { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: .45rem; }
+  .lang { border: 1px solid var(--line-strong); border-radius: 9px; background: var(--surface);
+          cursor: pointer; padding: .4rem .2rem; font: inherit; color: var(--fg);
+          min-height: 54px; text-align: center; transition: border-color .12s ease, transform .12s ease; }
   .lang:hover { border-color: var(--accent); transform: translateY(-1px); }
   .lang .fl { display: block; width: 24px; height: 18px; margin: 0 auto; border-radius: 2px;
-              object-fit: cover; box-shadow: 0 0 0 1px rgba(0,0,0,.15); }
-  .lang .nm { display: block; font-size: .68rem; color: var(--muted); margin-top: .1em;
+              object-fit: cover; box-shadow: 0 0 0 1px rgba(0,0,0,.14); }
+  .lang .nm { display: block; font-size: .6875rem; color: var(--muted); margin-top: .2rem;
               white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .lang[aria-pressed="true"] { border-color: var(--accent); border-width: 2px; padding: calc(.4em - 1px) calc(.2em - 1px); }
+  .lang[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
   .lang[aria-pressed="true"] .nm { color: var(--accent); font-weight: 600; }
 
-  .check { display: flex; align-items: center; gap: .5em; margin-top: .9em; font-size: .9rem; }
-  .check input { width: 18px; height: 18px; }
-
-  .mode-switch { margin-top: 1.6em; }
-  .mode-switch button { font: inherit; padding: .55em .9em; border: 1px solid var(--line);
-                        background: #fff; border-radius: 6px; cursor: pointer; color: var(--fg); min-height: 40px; }
-  .mode-switch button:hover { border-color: var(--accent); color: var(--accent); }
-
-  /* ---- advanced mode ---- */
-  .panel { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: .9em 1.2em; }
-  fieldset { border: 1px solid var(--line); border-radius: 6px; padding: .6em .8em .9em; margin: 0; background: #fff; }
-  legend { font-weight: 600; font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 0 .3em; }
-  label { display: block; font-size: .9rem; margin-top: .45em; }
-  select, input[type=text], input[type=number] { width: 100%; padding: .45em; font: inherit;
-    border: 1px solid var(--line); border-radius: 4px; min-height: 40px; background: #fff; color: var(--fg); }
-  input[type=range] { width: 100%; }
-  button.act { font: inherit; padding: .5em .9em; border: 1px solid var(--line); background: #fff;
-               border-radius: 5px; cursor: pointer; min-height: 40px; color: var(--fg); }
+  /* ---------- form controls ---------- */
+  label.field { display: block; font-size: .8125rem; color: var(--muted); }
+  label.field > span { display: block; margin-bottom: .3rem; }
+  select, input[type=text], input[type=number] {
+    width: 100%; padding: .5rem .6rem; font: inherit; color: var(--fg);
+    border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface);
+    min-height: 40px;
+  }
+  select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .check { display: flex; align-items: center; gap: .55rem; font-size: .875rem; color: var(--fg);
+           min-height: 40px; cursor: pointer; }
+  .check input { width: 18px; height: 18px; accent-color: var(--accent); }
+  button.act { font: inherit; padding: .55rem 1rem; border: 1px solid var(--line-strong);
+               background: var(--surface); border-radius: 8px; cursor: pointer; min-height: 40px;
+               color: var(--fg); transition: border-color .15s ease, color .15s ease; }
   button.act:hover { border-color: var(--accent); color: var(--accent); }
-  button.act.rec { color: var(--warn); border-color: var(--warn); }
-  .row { display: flex; gap: .5em; align-items: center; flex-wrap: wrap; }
+  button.act.rec { color: #fff; background: var(--warn); border-color: var(--warn); }
 
-  #log { padding: 0; list-style: none; font-size: .85rem; border: 1px solid var(--line);
-         background: #fff; border-radius: 6px; max-height: 230px; overflow: hidden; margin: 1.2em 0 3em; }
-  #log li { padding: .28em .6em; border-bottom: 1px solid #f0f3f5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .stat { font-variant-numeric: tabular-nums; color: var(--muted); font-size: .85rem; }
+  #log { padding: 0; list-style: none; font-size: .8125rem; margin: .5rem 0 0;
+         max-height: 220px; overflow: hidden; }
+  #log li { padding: .3rem 0; border-bottom: 1px solid var(--line); color: var(--muted);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   @media (max-width: 640px) {
-    canvas { height: 44vh; }
-    .wrap { padding: .9em; }
-    .panel { grid-template-columns: 1fr; }
-    header { padding: .6em .9em; }
+    canvas { height: 42vh; }
+    main { padding: 1rem 1rem 3rem; }
+    section { padding: 1rem; }
+    header { padding: .7rem 1rem; }
   }
 </style>
 </head>
@@ -135,9 +177,10 @@
 
 <header>
   <h1><a id="home" href="https://github.com/Guillain-RDCDE/tintinnabulum">Tintinnabulum</a></h1>
-  <span class="tag">listen to a live stream of events</span>
-  <a class="tag src" id="source-link" href="https://github.com/Guillain-RDCDE/tintinnabulum">source and documentation</a>
-  <span class="stat" id="stat"></span>
+  <span class="sub">listen to a live stream of events</span>
+  <span class="spacer"></span>
+  <span id="stat"></span>
+  <a class="src" id="source-link" href="https://github.com/Guillain-RDCDE/tintinnabulum">Source</a>
 </header>
 
 <div id="stage">
@@ -145,108 +188,126 @@
   <div id="unlock"><span>Tap to enable sound</span></div>
 </div>
 
-<div class="wrap">
+<main>
 
-  <!-- ================= simple ================= -->
-  <div id="simple">
-    <button id="start" class="primary" type="button" data-on="false">Start listening</button>
+  <div class="hero">
+    <button id="start" type="button" data-on="false">Start listening</button>
     <span id="audio-status"></span>
-
-    <p class="section-label">What to listen to</p>
-    <div class="feed-grid" id="feeds-simple"></div>
-    <p class="explain" id="feed-note"></p>
-
-    <div id="langs-wrap">
-      <p class="section-label">Wikipedia editions</p>
-      <div class="lang-grid" id="langs-grid"></div>
-    </div>
-
-    <ul class="explain" id="legend">
-      <li>A <strong>bell</strong> means something grew; a <strong>plucked string</strong> means it shrank.</li>
-      <li>A <strong>low note</strong> is a large event, a <strong>high note</strong> a small one.</li>
-      <li>Each mark is one event. Tap it to open the thing that made the sound.</li>
-    </ul>
-
-    <p class="section-label">Sound</p>
-    <div class="feed-grid" id="kits-simple"></div>
-    <p class="explain" id="kit-note"></p>
-
-    <p class="section-label">Colours</p>
-    <div class="palette-grid" id="palettes-simple"></div>
-
-    <p class="section-label">Shape</p>
-    <div class="shape-grid" id="shapes-simple"></div>
-    <label class="check"><input type="checkbox" id="starfield-simple"> Starry sky behind the events</label>
-
-    <div class="mode-switch">
-      <button id="to-advanced" type="button">Advanced settings</button>
-    </div>
   </div>
 
-  <!-- ================= advanced ================= -->
-  <div id="advanced" hidden>
-    <div class="panel">
-      <fieldset>
-        <legend>Source</legend>
-        <label>Feed
-          <select id="source">
-            <option value="eventstreams">Wikipedia — EventStreams (HTTPS)</option>
-            <option value="wikimon">Wikipedia — wikimon (Hatnote)</option>
-            <option value="bitcoin">Bitcoin — unconfirmed transactions</option>
-            <option value="coinbase">Coinbase — BTC-USD trades</option>
-            <option value="earthquakes">Earthquakes — USGS</option>
-            <option value="bluesky">Bluesky — post firehose</option>
-            <option value="github">GitHub — public events</option>
-            <option value="ingest">Ingest server (/events)</option>
-            <option value="random">Synthetic traffic</option>
+  <!-- ============ LISTEN ============ -->
+  <section id="sec-listen">
+    <h2>Listen to</h2>
+    <div class="cards" id="feeds"></div>
+    <p class="note" id="feed-note"></p>
+
+    <div id="langs-wrap" hidden>
+      <p class="sub-label">Wikipedia editions</p>
+      <div class="langs" id="langs-grid"></div>
+    </div>
+
+    <div id="ingest-wrap" hidden>
+      <p class="sub-label">Ingest stream</p>
+      <label class="field"><span>Stream URL</span>
+        <input type="text" id="ingest-url" value="/events" placeholder="http://localhost:8080/events">
+      </label>
+    </div>
+
+    <details class="more" id="more-listen">
+      <summary>Advanced</summary>
+      <div class="more-body">
+        <label class="field"><span>Editions by code</span>
+          <input type="text" id="langs" value="en" placeholder="en,fr,de">
+        </label>
+        <label class="field"><span>Wikipedia backend</span>
+          <select id="backend">
+            <option value="eventstreams">EventStreams (Wikimedia)</option>
+            <option value="wikimon">wikimon (Hatnote)</option>
           </select>
         </label>
-        <label>Wikipedia editions <input type="text" id="langs" value="en" placeholder="en,fr,de"></label>
-        <label id="ingest-row" hidden>Ingest stream URL
-          <input type="text" id="ingest-url" value="/events" placeholder="http://localhost:8080/events">
+      </div>
+    </details>
+  </section>
+
+  <!-- ============ SOUND ============ -->
+  <section id="sec-sound">
+    <h2>Sound</h2>
+    <div class="cards" id="kits"></div>
+    <p class="note" id="kit-note"></p>
+
+    <details class="more" id="more-sound">
+      <summary>Advanced</summary>
+      <div class="more-body">
+        <label class="field"><span>Volume</span>
+          <input type="range" id="volume" min="0" max="100" value="70">
         </label>
-        <div class="row" style="margin-top:.6em">
-          <button id="connect" class="act" type="button">Connect</button>
-          <span class="stat" id="conn">idle</span>
-        </div>
-      </fieldset>
-
-      <fieldset>
-        <legend>Instruments</legend>
-        <label>Kit <select id="kit"></select></label>
-        <label>Volume <input type="range" id="volume" min="0" max="100" value="70"></label>
-        <label>Max voices <input type="number" id="voices" min="1" max="64" value="16"></label>
-        <div class="row" style="margin-top:.6em">
-          <button id="record" class="act" type="button">Record</button>
-        </div>
-      </fieldset>
-
-      <fieldset>
-        <legend>Mapping</legend>
-        <label>Mode
+        <label class="field"><span>Simultaneous notes</span>
+          <input type="number" id="voices" min="1" max="64" value="16">
+        </label>
+        <label class="field"><span>Pitch curve</span>
           <select id="mode">
             <option value="adaptive">Adaptive (self-calibrating)</option>
             <option value="log">Logarithmic</option>
             <option value="linear">Linear</option>
           </select>
         </label>
-        <label>Scale <select id="scale"></select></label>
-        <label>Range (semitones) <input type="number" id="range" min="6" max="60" value="27"></label>
-        <label class="row" style="gap:.4em"><input type="checkbox" id="invert" checked> Big event = low note</label>
-      </fieldset>
+        <label class="field"><span>Musical scale</span><select id="scale"></select></label>
+        <label class="field"><span>Key</span><select id="key"></select></label>
+        <label class="field"><span>Range in semitones</span>
+          <input type="number" id="range" min="6" max="60" value="27">
+        </label>
+        <label class="field"><span>Humanise <span id="humanise-val">0</span></span>
+          <input type="range" id="humanise" min="0" max="20" value="0">
+        </label>
+        <label class="field"><span>Tempo <span id="bpm-val">free</span></span>
+          <input type="range" id="bpm" min="0" max="200" step="5" value="0">
+        </label>
+        <label class="field"><span>Snap notes to</span>
+          <select id="division">
+            <option value="4">Quarter notes</option>
+            <option value="8" selected>Eighth notes</option>
+            <option value="16">Sixteenth notes</option>
+          </select>
+        </label>
+        <div>
+          <label class="check"><input type="checkbox" id="invert" checked> Large events sound low</label>
+          <button id="record" class="act" type="button" style="margin-top:.4rem">Record</button>
+        </div>
+      </div>
+    </details>
+  </section>
 
-      <fieldset>
-        <legend>Look</legend>
-        <div class="palette-grid" id="palettes"></div>
-        <small id="palette-note" class="stat" style="display:block;margin-top:.5em;min-height:2.4em"></small>
-        <div class="shape-grid" id="shapes"></div>
-        <small id="shape-note" class="stat" style="display:block;margin-top:.5em;min-height:2.4em"></small>
-        <label class="check"><input type="checkbox" id="starfield"> Starry sky</label>
-      </fieldset>
+  <!-- ============ LOOK ============ -->
+  <section id="sec-look">
+    <h2>Look</h2>
+    <p class="sub-label" style="margin-top:0">Colours</p>
+    <div class="swatches" id="palettes"></div>
+    <p class="note" id="palette-note"></p>
 
-      <fieldset>
-        <legend>Filter</legend>
-        <label>Only these categories
+    <p class="sub-label">Shapes</p>
+    <div class="swatches" id="shapes"></div>
+    <p class="note" id="shape-note"></p>
+
+    <details class="more" id="more-look">
+      <summary>Advanced</summary>
+      <div class="more-body">
+        <div>
+          <label class="check"><input type="checkbox" id="starfield"> Starry sky</label>
+          <label class="check"><input type="checkbox" id="labels" checked> Show titles on new events</label>
+          <label class="check"><input type="checkbox" id="hud" checked> Show the rate counter</label>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <!-- ============ FILTER ============ -->
+  <section id="sec-filter">
+    <h2>Filter</h2>
+    <p class="note" style="margin-top:0">Anything filtered out is still drawn, dimmed, but stays silent.</p>
+    <details class="more" id="more-filter" style="border-top:none;margin-top:.4rem">
+      <summary>Choose what is heard</summary>
+      <div class="more-body">
+        <label class="field"><span>Categories</span>
           <select id="cats" multiple size="4">
             <option value="user" selected>user</option>
             <option value="anon" selected>anon</option>
@@ -254,18 +315,23 @@
             <option value="alert" selected>alert</option>
           </select>
         </label>
-        <label>Min magnitude <input type="number" id="minmag" value="0" min="0"></label>
-      </fieldset>
-    </div>
+        <label class="field"><span>Minimum size</span>
+          <input type="number" id="minmag" value="0" min="0">
+        </label>
+      </div>
+    </details>
+  </section>
 
-    <div class="mode-switch">
-      <button id="to-simple" type="button">Back to simple view</button>
-    </div>
+  <!-- ============ ACTIVITY ============ -->
+  <section id="sec-activity">
+    <h2>Activity</h2>
+    <details class="more" id="more-activity" style="border-top:none;margin-top:.4rem">
+      <summary>Show the event log</summary>
+      <ul id="log"></ul>
+    </details>
+  </section>
 
-    <ul id="log"></ul>
-  </div>
-
-</div>
+</main>
 
 <script type="module" src="./demo.js"></script>
 </body>

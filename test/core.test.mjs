@@ -1,7 +1,7 @@
 // Pure-logic checks. No browser needed: nothing here touches AudioContext or
 // canvas, which is the point of keeping those behind sinks.
 import { normalize, unitPosition } from '../src/core/event.js';
-import { Mapper } from '../src/core/mapper.js';
+import { Mapper, SCALES, KEYS } from '../src/core/mapper.js';
 import { VoicePool } from '../src/core/voices.js';
 import {
   PALETTES,
@@ -370,6 +370,72 @@ ok('spreading can still be turned off', unspread.length === 20 && new Set(unspre
    `${unspread.length} events across ${new Set(unspread).size} moments`);
 
 globalThis.fetch = realFetch;
+
+// --- musical rules ------------------------------------------------------
+
+ok('there are twelve keys', KEYS.length === 12, KEYS.join(' '));
+ok('there is a broad choice of scales', Object.keys(SCALES).length >= 15,
+   Object.keys(SCALES).length + ' scales');
+
+let scalesValid = true;
+for (const [name, degrees] of Object.entries(SCALES)) {
+  if (!degrees.length || degrees.some((d) => !Number.isInteger(d) || d < 0 || d > 11)) {
+    scalesValid = false;
+    console.log('   bad scale: ' + name);
+  }
+  if (new Set(degrees).size !== degrees.length) {
+    scalesValid = false;
+    console.log('   duplicate degrees in: ' + name);
+  }
+}
+ok('every scale is a valid set of degrees', scalesValid);
+
+// Every scale must survive quantization: a mapper set to it may never emit a
+// pitch outside it.
+let offScale = '';
+for (const name of Object.keys(SCALES)) {
+  const m = new Mapper({ scale: name, mode: 'log', range: 36, warmup: 1e9 });
+  for (let v = 1; v < 4000; v += 37) {
+    const deg = (((m.map(v).semitone % 12) + 12) % 12);
+    if (!SCALES[name].includes(deg)) offScale = `${name} produced ${deg}`;
+  }
+}
+ok('no scale ever emits a note outside itself', !offScale, offScale || 'all clean');
+
+const inC = new Mapper({ scale: 'major', mode: 'log', range: 24, warmup: 1e9, root: 0 });
+const inF = new Mapper({ scale: 'major', mode: 'log', range: 24, warmup: 1e9, root: 5 });
+ok('changing key transposes everything by the same amount',
+   inF.map(500).semitone - inC.map(500).semitone === 5,
+   `${inC.map(500).semitone} -> ${inF.map(500).semitone}`);
+
+const straight = new Mapper({ mode: 'log', range: 27, warmup: 1e9, jitter: 0 });
+const humanised = new Mapper({ mode: 'log', range: 27, warmup: 1e9, jitter: 2 });
+const spreadOf = (m) => new Set(Array.from({ length: 60 }, () => m.map(4000).semitone)).size;
+ok('humanising varies a repeated value, and none does not',
+   spreadOf(straight) === 1 && spreadOf(humanised) > 1,
+   `plain=${spreadOf(straight)} humanised=${spreadOf(humanised)}`);
+
+// --- rhythmic quantisation ----------------------------------------------
+// _onset only reads currentTime, so the grid is testable without a browser.
+const { AudioSink } = await import('../src/audio/audio-sink.js');
+const fakeSink = new AudioSink({ ctx: null, destination: null });
+
+const at = (t) => ({ currentTime: t });
+fakeSink.setTempo(0);
+ok('free time schedules immediately', fakeSink._onset(at(12.34)) === 0);
+
+fakeSink.setTempo(120, 4); // quarter notes at 120bpm = every 0.5s
+const grid = [10.01, 10.2, 10.49, 10.51, 10.9].map((t) => fakeSink._onset(at(t)));
+ok('onsets land on the beat', grid.every((g) => Math.abs(g / 0.5 - Math.round(g / 0.5)) < 1e-9),
+   grid.map((g) => g.toFixed(3)).join(' '));
+ok('events inside one beat gather onto it', grid[0] === grid[1] && grid[1] === grid[2],
+   grid.slice(0, 3).join(' '));
+ok('the next beat is a separate onset', grid[3] > grid[2], `${grid[2]} then ${grid[3]}`);
+ok('a note is never scheduled in the past', grid.every((g, i) => g >= [10.01, 10.2, 10.49, 10.51, 10.9][i]));
+
+fakeSink.setTempo(120, 16); // sixteenths = every 0.125s
+const fine = fakeSink._onset(at(10.01));
+ok('a finer division gives a tighter grid', Math.abs(fine - 10.125) < 1e-9, String(fine));
 
 console.log(fails ? `\n${fails} FAILURE(S)` : '\nall core checks passed');
 process.exit(fails ? 1 : 0);
