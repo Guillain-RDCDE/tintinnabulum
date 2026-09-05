@@ -512,6 +512,40 @@ ok('every scene is offered in the picker',
    (await page.locator('#scenes .card').count()) === sceneNames.length,
    (await page.locator('#scenes .card').count()) + ' cards');
 
+// Each card carries a still drawn by the scene itself. A blank one would be a
+// card that promises nothing, so the pixels are counted rather than trusted.
+const previews = await page.evaluate(() =>
+  [...document.querySelectorAll('#scenes .card')].map((b) => {
+    const cv = b.querySelector('canvas');
+    if (!cv || !cv.width) return { name: b.dataset.scene, ink: -1 };
+    const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
+    const bg = [d[0], d[1], d[2]];
+    let ink = 0;
+    for (let i = 0; i < d.length; i += 4 * 17) {
+      if (Math.abs(d[i] - bg[0]) + Math.abs(d[i + 1] - bg[1]) + Math.abs(d[i + 2] - bg[2]) > 20) ink++;
+    }
+    return { name: b.dataset.scene, ink };
+  })
+);
+const emptyCards = previews.filter((p) => p.ink < 6);
+ok('every scene card shows a real preview', emptyCards.length === 0,
+   emptyCards.map((p) => `${p.name}(${p.ink})`).join(' ') || previews.length + ' painted');
+
+// The stills are drawn in the active palette, so switching must redraw them.
+const beforeSwitch = await page.evaluate(() => {
+  const cv = document.querySelector('#scenes .card canvas');
+  return cv.getContext('2d').getImageData(0, 0, 4, 4).data.join(',');
+});
+await page.click('#palettes .sw[data-palette="papyrus"]');
+await page.waitForTimeout(300);
+const afterSwitch = await page.evaluate(() => {
+  const cv = document.querySelector('#scenes .card canvas');
+  return cv.getContext('2d').getImageData(0, 0, 4, 4).data.join(',');
+});
+ok('the previews follow the palette rather than going stale', beforeSwitch !== afterSwitch);
+await page.click('#palettes .sw[data-palette="marine"]');
+await page.waitForTimeout(200);
+
 const sceneErrors = [];
 const blank = [];
 const inkOf = () =>
@@ -696,6 +730,10 @@ const factories = await page.evaluate(async () => {
     earthquakes: () => m.earthquakes(),
     bluesky: () => m.bluesky(),
     github: () => m.github(),
+    weather: () => m.noaaAlerts(),
+    hackernews: () => m.hackerNews(),
+    commons: () => m.wikipedia({ wikis: ['commonswiki'], mainNamespaceOnly: false }),
+    wikidata: () => m.wikipedia({ wikis: ['wikidatawiki'] }),
   })) {
     try {
       const s = make();

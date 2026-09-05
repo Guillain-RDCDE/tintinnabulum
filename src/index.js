@@ -33,6 +33,7 @@ export {
   SCENE_NAMES,
   DEFAULT_SCENE,
   registerScene,
+  previewScene,
   noise2,
 } from './visual/scenes.js';
 export {
@@ -56,6 +57,8 @@ export {
   earthquakes,
   bluesky,
   github,
+  noaaAlerts,
+  hackerNews,
   WIKIPEDIA_LANGS,
   WIKIPEDIA_LANGUAGES,
   WIKIPEDIA_FLAG_CC,

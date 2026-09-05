@@ -184,14 +184,33 @@ export function pollSource({
     // like seismicity, which arrives in swarms rather than on a metronome.
     const stamps = list.map((e) => Number(e && e.ts));
     const dated = stamps.every(Number.isFinite);
-    const lo = dated ? Math.min(...stamps) : 0;
-    const hi = dated ? Math.max(...stamps) : 0;
+
+    // Bounds are taken from percentiles rather than min and max. Feeds like
+    // active weather alerts hold one item issued days ago among hundreds from
+    // the last few hours; on raw extremes that single outlier claims the start
+    // of the window and squeezes everything else into its final few percent,
+    // which plays as one event and then silence.
+    const sorted = dated ? [...stamps].sort((a, b) => a - b) : [];
+    const at = (p) => sorted[Math.max(0, Math.min(sorted.length - 1, Math.round((sorted.length - 1) * p)))];
+    const lo = dated ? at(0.05) : 0;
+    const hi = dated ? at(0.97) : 0;
     const useTimes = dated && hi > lo;
 
     const ordered = useTimes ? [...list].sort((a, b) => Number(a.ts) - Number(b.ts)) : list;
+    const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
     const offsets = useTimes
-      ? ordered.map((e) => ((Number(e.ts) - lo) / (hi - lo)) * window)
+      ? ordered.map((e) => clamp01((Number(e.ts) - lo) / (hi - lo)) * window)
       : ordered.map((_, i) => (window / ordered.length) * i);
+
+    // Clamping the outliers stacks them on the boundary, and genuine ties land
+    // together too, so a dozen events can share one instant and sound as a
+    // single blurred chord. Nudge each one just past its predecessor: gaps
+    // wider than the minimum are left exactly as they were, so real clustering
+    // survives while simultaneity does not.
+    const minGap = Math.max(70, Math.min(400, window / (ordered.length * 4)));
+    for (let i = 1; i < offsets.length; i++) {
+      if (offsets[i] < offsets[i - 1] + minGap) offsets[i] = offsets[i - 1] + minGap;
+    }
 
     ordered.forEach((ev, i) => {
       const t = setTimeout(() => {
@@ -212,7 +231,9 @@ export function pollSource({
         try {
           const res = await fetch(url, fetchOptions);
           const body = await res.json();
-          const out = map(body);
+          // `map` may be async: some feeds return a list of ids and need a
+          // second request per entry before there is anything to sonify.
+          const out = await map(body);
           const list = Array.isArray(out) ? out : out ? [out] : [];
           deliver(list.filter(fresh), emit);
         } catch (e) {
@@ -485,6 +506,112 @@ export function github({ interval = 75000, name = 'github', perPage = 30 } = {})
   });
 }
 
+/** Severity is a word, and the mapper needs a number. */
+const NWS_SEVERITY = { Extreme: 100, Severe: 60, Moderate: 28, Minor: 10, Unknown: 5 };
+
+/**
+ * Active weather alerts from the US National Weather Service.
+ *
+ * A different kind of feed from the rest: a few hundred alerts stand active at
+ * any moment, each carrying the time it was issued, so the replay keeps the
+ * real shape of a day's weather rather than spacing it evenly.
+ */
+export function noaaAlerts({
+  interval = 120000,
+  name = 'weather',
+  // A few hundred alerts stand active. Over fifteen minutes that is a trickle
+  // with long empty stretches; over five it reads as weather.
+  replayOver = 5 * 60000,
+  url = 'https://api.weather.gov/alerts/active',
+} = {}) {
+  return pollSource({
+    name,
+    interval,
+    url,
+    firstSpread: replayOver,
+    fetchOptions: { headers: { Accept: 'application/geo+json' } },
+    map(body) {
+      if (!body || !Array.isArray(body.features)) return [];
+      return body.features
+        .map((f) => {
+          const p = f.properties || {};
+          const sev = NWS_SEVERITY[p.severity] ?? 5;
+          const big = sev >= 60;
+          return {
+            magnitude: sev,
+            polarity: 1,
+            id: p.id || f.id,
+            label: `${p.event || 'Alert'} — ${String(p.areaDesc || '').split(';')[0].trim()}`,
+            url: p['@id'] || '',
+            category: big ? 'alert' : p.severity === 'Moderate' ? 'anon' : 'user',
+            accent: p.severity === 'Extreme',
+            ts: Date.parse(p.sent) || Date.now(),
+            source: 'nws',
+            data: f,
+          };
+        })
+        .filter((e) => e.id);
+    },
+  });
+}
+
+/**
+ * Hacker News, via its public Firebase API.
+ *
+ * The list endpoint returns ids only, so each entry costs a second request.
+ * `topstories` rather than `newstories`: a brand-new story always scores 1, so
+ * the whole feed would land on a single pitch, whereas the top list spans
+ * three orders of magnitude. De-duplication means each story sounds once, when
+ * it first appears.
+ */
+export function hackerNews({
+  interval = 90000,
+  name = 'hackernews',
+  list = 'topstories',
+  // Thirty stories over ten minutes is three a minute, which is not a feed so
+  // much as an occasional noise. Sixty over three gives it a pulse.
+  batch = 60,
+  replayOver = 3 * 60000,
+} = {}) {
+  const fetched = new Set();
+  return pollSource({
+    name,
+    interval,
+    firstSpread: replayOver,
+    url: `https://hacker-news.firebaseio.com/v0/${list}.json`,
+    async map(ids) {
+      if (!Array.isArray(ids)) return [];
+      const wanted = ids.filter((id) => !fetched.has(id)).slice(0, batch);
+      const items = await Promise.all(
+        wanted.map(async (id) => {
+          fetched.add(id);
+          if (fetched.size > 3000) fetched.delete(fetched.values().next().value);
+          try {
+            const r = await fetch(`https://hacker-news.firebaseio.com/v0/item/${id}.json`);
+            return r.ok ? await r.json() : null;
+          } catch {
+            return null;
+          }
+        })
+      );
+      return items
+        .filter((it) => it && it.title)
+        .map((it) => ({
+          magnitude: Math.max(1, (it.score || 0) + (it.descendants || 0) * 2),
+          polarity: 1,
+          id: String(it.id),
+          label: it.title,
+          url: it.url || `https://news.ycombinator.com/item?id=${it.id}`,
+          category: (it.score || 0) >= 300 ? 'alert' : 'user',
+          accent: (it.score || 0) >= 500,
+          ts: (it.time || 0) * 1000 || Date.now(),
+          source: 'hn',
+          data: it,
+        }));
+    },
+  });
+}
+
 // --- Wikipedia ------------------------------------------------------------
 
 const IP_RE = /^(\d{1,3}\.){3}\d{1,3}$|:/;
@@ -505,9 +632,14 @@ export function wikipedia({
   mainNamespaceOnly = true,
   welcomeNewUsers = true,
   project = 'wikipedia',
+  // Explicit wiki names, for the sister projects: commonswiki, wikidatawiki,
+  // enwiktionary and so on. Overrides `langs` when given.
+  wikis: explicitWikis = null,
   onStatus = null,
 } = {}) {
-  const wikis = new Set(langs.map((l) => l + (project === 'wikipedia' ? 'wiki' : project)));
+  const wikis = explicitWikis
+    ? new Set(explicitWikis)
+    : new Set(langs.map((l) => l + (project === 'wikipedia' ? 'wiki' : project)));
 
   if (backend === 'eventstreams') {
     return sseSource({

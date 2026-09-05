@@ -99,6 +99,14 @@
                grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
 
   .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(134px, 1fr)); gap: .55rem; }
+
+  /* scene cards carry a live preview drawn by the scene itself */
+  #scenes { grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); }
+  #scenes .card { padding: 0; overflow: hidden; min-height: 0; }
+  #scenes .card canvas { display: block; width: 100%; height: 84px; background: #04141c; }
+  #scenes .card .cap { display: block; padding: .45rem .6rem .5rem; }
+  #scenes .card b { font-size: .875rem; }
+  #scenes .card span { font-size: .7rem; }
   .card { border: 1px solid var(--line-strong); border-radius: var(--r-ctl); background: var(--surface);
     cursor: pointer; padding: .65rem .7rem; text-align: left; font: inherit; color: var(--fg);
     min-height: 52px; transition: border-color .15s ease, transform .1s ease; }

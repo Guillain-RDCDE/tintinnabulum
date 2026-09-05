@@ -13,12 +13,15 @@ import {
   drawShape,
   SCENES,
   DEFAULT_SCENE,
+  previewScene,
   wikipedia,
   bitcoin,
   coinbase,
   earthquakes,
   bluesky,
   github,
+  noaaAlerts,
+  hackerNews,
   ingestSource,
   randomSource,
   WIKIPEDIA_LANGUAGES,
@@ -170,6 +173,31 @@ const FEEDS = {
     blurb: 'Public events',
     note: 'Pushes, pull requests, releases and stars across all of GitHub, polled once a minute and spread out so it plays as a stream rather than a clump.',
     make: () => github(),
+  },
+  weather: {
+    label: 'Severe weather',
+    blurb: 'US alerts, live',
+    note: 'Active alerts from the National Weather Service, pitched by severity. A few hundred stand active at once, and each carries the moment it was issued, so the replay keeps the real shape of the day rather than a metronome.',
+    make: () => noaaAlerts(),
+  },
+  hackernews: {
+    label: 'Hacker News',
+    blurb: 'Front page, by score',
+    note: 'Each story sounds once, when it first reaches the top list, pitched by score and comments. A brand-new story always scores one, so the front page is used instead: it spans three orders of magnitude.',
+    make: () => hackerNews(),
+  },
+  commons: {
+    label: 'Wikimedia Commons',
+    blurb: 'Media uploads and edits',
+    note: 'The shared media library behind every Wikipedia: photographs, maps, scans and audio, edited continuously.',
+    make: () =>
+      wikipedia({ wikis: ['commonswiki'], mainNamespaceOnly: false, onStatus: setStatus }),
+  },
+  wikidata: {
+    label: 'Wikidata',
+    blurb: 'Structured-data edits',
+    note: 'The machine-readable knowledge base underneath the encyclopedias. Busy, and almost entirely the work of bots.',
+    make: () => wikipedia({ wikis: ['wikidatawiki'], onStatus: setStatus }),
   },
   ingest: {
     label: 'Your own data',
@@ -412,17 +440,46 @@ function selectScene(name, persist = true) {
   if (persist) store.set('t:scene', name);
 }
 
+// Each card carries a still drawn by the scene itself, against synthetic
+// events. A stored image would go stale the moment a palette changed; this
+// cannot disagree with what you are about to launch.
+function paintScenePreview(cv, name) {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = cv.clientWidth || 148;
+  const h = 84;
+  cv.width = Math.round(w * dpr);
+  cv.height = Math.round(h * dpr);
+  const c = cv.getContext('2d');
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  previewScene(c, name, {
+    w, h,
+    palette: PALETTES[canvas.paletteName].colors,
+    shape: canvas.shape,
+  });
+}
+
 for (const [name, def] of Object.entries(SCENES)) {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'card';
   btn.dataset.scene = name;
   btn.setAttribute('aria-pressed', 'false');
-  btn.innerHTML = '<b></b><span></span>';
-  btn.querySelector('b').textContent = def.label;
-  btn.querySelector('span').textContent = def.positional === false ? 'Composed view' : 'One mark per event';
+  btn.title = def.note;
+  const cv = document.createElement('canvas');
+  const cap = document.createElement('span');
+  cap.className = 'cap';
+  cap.innerHTML = '<b></b><span></span>';
+  cap.querySelector('b').textContent = def.label;
+  cap.querySelector('span').textContent =
+    def.positional === false ? 'Composed view' : 'One mark per event';
+  btn.append(cv, cap);
   btn.addEventListener('click', () => selectScene(name));
   $('#scenes').appendChild(btn);
+  requestAnimationFrame(() => paintScenePreview(cv, name));
+}
+
+function repaintScenePreviews() {
+  for (const b of $('#scenes').children) paintScenePreview(b.querySelector('canvas'), b.dataset.scene);
 }
 
 const paletteGrid = $('#palettes');
@@ -432,7 +489,10 @@ function selectPalette(name, persist = true) {
   $('#palette-note').textContent = PALETTES[name].note;
   for (const b of paletteGrid.children) b.setAttribute('aria-pressed', String(b.dataset.palette === name));
   if (persist) store.set('t:palette', name);
+  // The swatches and the scene stills are drawn in the palette's own colours,
+  // so they follow the choice rather than lying about it.
   if ($('#shapes').children.length) repaintShapeSwatches();
+  if ($('#scenes').children.length) repaintScenePreviews();
 }
 
 for (const [name, def] of Object.entries(PALETTES)) {

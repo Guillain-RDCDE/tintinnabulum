@@ -131,8 +131,10 @@ export const SCENES = {
       api.scene.trails.push({
         x: p.x,
         y: p.y,
-        px: p.x,
-        py: p.y,
+        // The path so far. The canvas is cleared every frame, so a trail that
+        // only drew the segment since the last frame left a dash rather than
+        // the track it had travelled.
+        pts: [p.x, p.y],
         color: p.color,
         width: Math.max(0.8, p.r * 0.09),
         life: 1,
@@ -148,10 +150,10 @@ export const SCENES = {
       for (let i = s.trails.length - 1; i >= 0; i--) {
         const tr = s.trails[i];
         const angle = noise2(tr.x / 190 + t, tr.y / 190 - t) * TAU * 2;
-        tr.px = tr.x;
-        tr.py = tr.y;
         tr.x += Math.cos(angle) * tr.speed * step;
         tr.y += Math.sin(angle) * tr.speed * step;
+        tr.pts.push(tr.x, tr.y);
+        if (tr.pts.length > 120) tr.pts.splice(0, tr.pts.length - 120);
         tr.life -= step * 0.14;
         if (
           tr.life <= 0 ||
@@ -160,13 +162,14 @@ export const SCENES = {
           s.trails.splice(i, 1);
           continue;
         }
-        ctx.globalAlpha = Math.min(0.8, tr.life);
+        ctx.globalAlpha = Math.min(0.85, tr.life);
         ctx.strokeStyle = tr.color;
         ctx.lineWidth = tr.width;
         ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
         ctx.beginPath();
-        ctx.moveTo(tr.px, tr.py);
-        ctx.lineTo(tr.x, tr.y);
+        ctx.moveTo(tr.pts[0], tr.pts[1]);
+        for (let k = 2; k < tr.pts.length; k += 2) ctx.lineTo(tr.pts[k], tr.pts[k + 1]);
         ctx.stroke();
       }
     },
@@ -361,6 +364,7 @@ export const SCENES = {
   rain: {
     label: 'Rain',
     positional: false,
+    preview: { dt: 28, frames: 150 }, // drops live under a second
     note: 'Events fall, gather speed and break on the surface. The natural partner to the Water kit.',
     init(api) {
       api.scene.drops = [];
@@ -478,6 +482,7 @@ export const SCENES = {
   polar: {
     label: 'Tree rings',
     positional: false,
+    preview: { dt: 420, frames: 130 }, // a full turn takes a minute
     note: 'A clock face: arrival sets the angle, size sets the distance out. History accumulates as rings.',
     init(api) {
       api.scene.marks = [];
@@ -797,6 +802,110 @@ export const SCENES = {
 
 export const SCENE_NAMES = Object.keys(SCENES);
 export const DEFAULT_SCENE = 'bloom';
+
+/**
+ * Draw a still preview of a scene onto a small canvas context.
+ *
+ * It runs the real scene against synthetic events and a simulated clock, so a
+ * preview cannot drift from what the scene actually does -- a stored image
+ * would be stale the moment a palette or a parameter changed. Motion-based
+ * scenes need time to develop, hence the simulated frames rather than one.
+ */
+export function previewScene(
+  ctx,
+  name,
+  // Roughly seven seconds of simulated time. Much less and the scenes that
+  // need time to develop -- motes tracing a flow field, drops falling, a
+  // polar sweep advancing -- show an almost empty card and undersell
+  // themselves. dt stays modest so the physics-based scenes integrate the
+  // same way they do live.
+  { w, h, palette, shape = 'circle', frames = 110, dt = 62, seed = 7 } = {}
+) {
+  const scene = SCENES[name] || SCENES[DEFAULT_SCENE];
+  // A scene may declare its own timescale: a polar sweep takes a minute to go
+  // round, and drops live for under a second, so neither reads well at the
+  // default rate.
+  if (scene.preview) {
+    frames = scene.preview.frames || frames;
+    dt = scene.preview.dt || dt;
+  }
+  let s = seed;
+  const rnd = () => {
+    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    return s / 0x7fffffff;
+  };
+
+  const roles = ['user', 'anon', 'bot', 'user', 'anon'];
+  const particles = [];
+  const api = {
+    w, h, palette, particles,
+    now: 0,
+    dt,
+    shape,
+    ringLife: 2200,
+    scene: {},
+    colorFor: (c) => palette[c] || palette.default,
+  };
+
+  ctx.fillStyle = palette.background;
+  ctx.fillRect(0, 0, w, h);
+  if (scene.init) scene.init(api);
+
+  const born = [];
+  for (let i = 0; i < 34; i++) {
+    const p = rnd() ** 1.7;
+    born.push({
+      // Births run right to the end: scenes whose marks are short-lived, like
+      // falling drops, otherwise catch a quiet final frame and look empty.
+      at: Math.floor(rnd() * (frames - 2)),
+      p: {
+        x: 8 + rnd() * (w - 16),
+        y: 8 + rnd() * (h - 16),
+        r: Math.max(2, Math.sqrt(p) * Math.min(w, h) * 0.34),
+        rot: rnd() * Math.PI * 2,
+        pick: rnd(),
+        color: palette[roles[i % roles.length]] || palette.default,
+        alpha0: 0.5,
+        ring: true,
+        label: '',
+        url: '',
+        life: 12000,
+        category: roles[i % roles.length],
+      },
+    });
+  }
+
+  for (let f = 0; f < frames; f++) {
+    api.now = f * api.dt;
+    for (const b of born) {
+      if (b.at !== f) continue;
+      b.p.born = api.now;
+      particles.push(b.p);
+      if (scene.event) scene.event(b.p, api);
+    }
+    for (let i = particles.length - 1; i >= 0; i--) {
+      if (api.now - particles[i].born >= particles[i].life) particles.splice(i, 1);
+    }
+    ctx.save();
+    try {
+      scene.frame(ctx, api);
+    } catch (e) {
+      ctx.restore();
+      return false;
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
+    // Only the last frame is kept, but the trailing ones must accumulate for
+    // scenes that build up rather than redraw, so the ground is repainted
+    // between frames exactly as the live canvas does.
+    if (f < frames - 1) {
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = palette.background;
+      ctx.fillRect(0, 0, w, h);
+    }
+  }
+  return true;
+}
 
 /** Add your own. A scene needs only `frame`; `init` and `event` are optional. */
 export function registerScene(name, def) {

@@ -406,13 +406,69 @@ ok('the replay runs in chronological order',
 const span = CLUSTERED[11].ts - CLUSTERED[0].ts;
 const expected = CLUSTERED.map((e) => ((e.ts - CLUSTERED[0].ts) / span) * 1500);
 const drift = rhythm.map((t, i) => Math.abs(t - expected[i]));
-ok('every event lands where its own timestamp puts it',
-   Math.max(...drift) < 120, 'worst drift ' + Math.round(Math.max(...drift)) + 'ms');
+// Placement is proportional to the timestamps *subject to* a minimum audible
+// separation: two notes in the same millisecond are one blurred chord, not
+// two events. So the contract is not exact proportional placement but
+// preserved clustering with nothing landing on top of anything else.
+const gapsIn = rhythm.slice(1, 6).map((t, i) => t - rhythm[i]);
+const gapBetween = rhythm[6] - rhythm[5];
+// There is deliberately no assertion on the smallest observed gap. Scheduling
+// separates notes by 70ms, but these are setTimeout callbacks: after heavy
+// work the event loop can fire several in one tick, so a measured gap of zero
+// says something about Node's timers rather than about this code. The
+// properties below survive that noise and are the ones that matter.
+ok('the silence between two swarms dwarfs the gaps inside one',
+   gapBetween > Math.max(...gapsIn) * 3,
+   `between ${gapBetween}ms vs widest within ${Math.max(...gapsIn)}ms`);
 ok('an even spacing is rejected: the first six arrive well before the midpoint',
-   rhythm[5] < 1500 * 0.2 && rhythm[6] > 1500 * 0.8,
+   rhythm[5] < 1500 * 0.45 && rhythm[6] > 1500 * 0.8,
    `sixth at ${rhythm[5]}ms, seventh at ${rhythm[6]}ms of 1500`);
 
-globalThis.fetch = async () => ({ ok: true, json: async () => BATCH });
+// One stale entry among many recent ones must not claim the whole window.
+// Active weather alerts are exactly this shape: hundreds issued within a few
+// hours, and one left over from days ago. On raw min/max bounds that single
+// outlier took the start of the window and crushed everything else into its
+// last few percent, which played as one event and then silence.
+const nowMs = Date.now();
+const OUTLIER = [
+  { magnitude: 50, id: 'ancient', ts: nowMs - 5 * 86400000 },
+  ...Array.from({ length: 14 }, (_, i) => ({
+    magnitude: 20,
+    id: 'recent' + i,
+    ts: nowMs - 3600000 + i * 60000,
+  })),
+];
+globalThis.fetch = async () => ({ ok: true, json: async () => OUTLIER });
+
+const robust = await new Promise((resolve) => {
+  const stamps = [];
+  const src = pollSource({
+    url: 'https://example.invalid/alerts',
+    interval: 60000,
+    firstSpread: 2000,
+    map: (b) => b,
+    name: 'outlier-test',
+  });
+  const t0 = Date.now();
+  src.start(() => stamps.push(Date.now() - t0));
+  setTimeout(() => {
+    src.stop();
+    resolve(stamps);
+  }, 2700);
+});
+ok('a stale outlier does not empty the replay', robust.length === 15,
+   robust.length + ' of 15 delivered');
+ok('the bulk is not crushed into the tail by one old entry',
+   robust.filter((t) => t < 1200).length >= 5,
+   robust.filter((t) => t < 1200).length + ' arrived in the first 1.2s');
+// Timer jitter can still collapse the odd pair into one millisecond, so this
+// asks that the batch is overwhelmingly spread rather than perfectly so.
+ok('the batch does not arrive as a chord',
+   new Set(robust).size >= robust.length * 0.85,
+   `${new Set(robust).size} distinct moments for ${robust.length} events`);
+ok('the replay spans its window rather than bunching',
+   Math.max(...robust) - Math.min(...robust) > 900,
+   `spanned ${Math.max(...robust) - Math.min(...robust)}ms`);
 
 globalThis.fetch = realFetch;
 
