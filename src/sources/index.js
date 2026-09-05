@@ -148,6 +148,7 @@ export function pollSource({
   // nothing, which is heard as the feed dying rather than as pacing.
   spreadFraction = 0.95,
   maxSpread = Infinity,
+  firstSpread = 0, // longer window for the opening backlog; 0 = same as the rest
 }) {
   let timer = 0;
   let stopped = false;
@@ -165,18 +166,38 @@ export function pollSource({
     return true;
   };
 
+  let firstBatch = true;
+
   const deliver = (list, emit) => {
     if (!spread || list.length <= 1) {
       for (const ev of list) emit(ev);
       return;
     }
-    const window = Math.min(maxSpread, interval * spreadFraction);
-    const gap = window / list.length;
-    list.forEach((ev, i) => {
+    // The opening batch is a backlog: it may be given a longer window of its
+    // own, so a sparse feed plays out as a slow replay instead of a minute of
+    // activity followed by silence.
+    const window = firstBatch && firstSpread ? firstSpread : Math.min(maxSpread, interval * spreadFraction);
+    firstBatch = false;
+
+    // Play the batch to its own rhythm where the events carry real times.
+    // Spacing them evenly discards exactly what is interesting about a feed
+    // like seismicity, which arrives in swarms rather than on a metronome.
+    const stamps = list.map((e) => Number(e && e.ts));
+    const dated = stamps.every(Number.isFinite);
+    const lo = dated ? Math.min(...stamps) : 0;
+    const hi = dated ? Math.max(...stamps) : 0;
+    const useTimes = dated && hi > lo;
+
+    const ordered = useTimes ? [...list].sort((a, b) => Number(a.ts) - Number(b.ts)) : list;
+    const offsets = useTimes
+      ? ordered.map((e) => ((Number(e.ts) - lo) / (hi - lo)) * window)
+      : ordered.map((_, i) => (window / ordered.length) * i);
+
+    ordered.forEach((ev, i) => {
       const t = setTimeout(() => {
         pending.delete(t);
         if (!stopped) emit(ev);
-      }, Math.round(i * gap));
+      }, Math.round(offsets[i]));
       pending.add(t);
     });
   };
@@ -345,10 +366,16 @@ export function earthquakes({
   interval = 60000,
   bigMag = 5,
   name = 'earthquakes',
+  // The day's backlog is a few hundred events. Played over one poll interval
+  // it is a minute of activity and then silence; played over twenty, it is a
+  // slow replay of the day that keeps its own swarms and clusters, with live
+  // events arriving on top.
+  replayOver = 20 * 60000,
 } = {}) {
   return pollSource({
     name,
     interval,
+    firstSpread: replayOver,
     url: `https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/${window}.geojson`,
     map(body) {
       if (!body || !Array.isArray(body.features)) return [];

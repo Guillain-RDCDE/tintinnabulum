@@ -369,6 +369,51 @@ const unspread = await new Promise((resolve) => {
 ok('spreading can still be turned off', unspread.length === 20 && new Set(unspread).size <= 2,
    `${unspread.length} events across ${new Set(unspread).size} moments`);
 
+// Events that carry real times must keep their own rhythm. Spacing a batch
+// evenly discards exactly what is interesting about a feed like seismicity,
+// which arrives in swarms rather than on a metronome.
+const base = Date.now() - 3600000;
+// Two tight clusters an hour apart, with nothing in between.
+const CLUSTERED = [
+  ...Array.from({ length: 6 }, (_, i) => ({ magnitude: 100, id: 'a' + i, ts: base + i * 4000 })),
+  ...Array.from({ length: 6 }, (_, i) => ({ magnitude: 100, id: 'b' + i, ts: base + 3000000 + i * 4000 })),
+];
+globalThis.fetch = async () => ({ ok: true, json: async () => CLUSTERED });
+
+const rhythm = await new Promise((resolve) => {
+  const stamps = [];
+  const src = pollSource({
+    url: 'https://example.invalid/quakes',
+    interval: 60000,
+    firstSpread: 1500,
+    map: (b) => b,
+    name: 'rhythm-test',
+  });
+  const t0 = Date.now();
+  src.start(() => stamps.push(Date.now() - t0));
+  setTimeout(() => {
+    src.stop();
+    resolve(stamps);
+  }, 1900);
+});
+ok('a timed batch is replayed in full', rhythm.length === 12, rhythm.length + ' delivered');
+ok('the replay runs in chronological order',
+   rhythm.every((t, i) => i === 0 || t >= rhythm[i - 1]), rhythm.join(','));
+
+// The real property: each event lands at its own position in the source's
+// timeline, scaled into the window. An even spacing would put event 6 at the
+// halfway mark; the true timeline puts it at the start of the second swarm.
+const span = CLUSTERED[11].ts - CLUSTERED[0].ts;
+const expected = CLUSTERED.map((e) => ((e.ts - CLUSTERED[0].ts) / span) * 1500);
+const drift = rhythm.map((t, i) => Math.abs(t - expected[i]));
+ok('every event lands where its own timestamp puts it',
+   Math.max(...drift) < 120, 'worst drift ' + Math.round(Math.max(...drift)) + 'ms');
+ok('an even spacing is rejected: the first six arrive well before the midpoint',
+   rhythm[5] < 1500 * 0.2 && rhythm[6] > 1500 * 0.8,
+   `sixth at ${rhythm[5]}ms, seventh at ${rhythm[6]}ms of 1500`);
+
+globalThis.fetch = async () => ({ ok: true, json: async () => BATCH });
+
 globalThis.fetch = realFetch;
 
 // --- musical rules ------------------------------------------------------
