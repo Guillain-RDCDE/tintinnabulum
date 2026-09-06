@@ -280,6 +280,36 @@ sharing a luminance band. *Monochrome* is the deliberate exception, held to a
 lightness floor instead, since its purpose is to remain readable without colour
 vision.
 
+### Colour variety
+
+A palette names one colour per category, which for a long time meant a screen
+carried four. That is not what made it look flat, though. The commonest
+category in a live feed is `user`, and in fifteen of the seventeen palettes
+`user` was a near-white — so most of a running screen was white, whichever
+palette you picked. Every palette now gives that category a real hue.
+
+On top of that, each event takes its own shade of its category's colour:
+
+```js
+new CanvasSink('#canvas', { richness: 0.45, depth: true });
+sink.setRichness(0);   // one exact colour per category
+sink.setRichness(1);   // shades spread far enough to drift in hue
+```
+
+The variation is computed in OKLab, not HSL, so a lighter or darker shade keeps
+its hue instead of sliding towards green the way an HSL lightness change does
+([`src/visual/color.js`](src/visual/color.js)). Out-of-gamut results lose
+chroma rather than being clipped channel by channel, which is what otherwise
+turns a dark ink into pure red. Lightness varies first and hue last: depth in a
+dense field comes from value, and spreading hue early is how a visualisation
+turns into confetti.
+
+`richness: 0` is an exact identity, and it is the honest setting whenever
+colour is meant to *identify* a category rather than decorate it. `depth` adds
+a shallow gradient and an outline on each mark; the outline is what keeps a
+pile of translucent marks reading as separate marks instead of averaging into
+one pale wash.
+
 ### Visualisations
 
 A scene decides what a moment of data looks like. Seventeen ship — the four
@@ -395,6 +425,7 @@ src/visual/
   canvas-sink.js        the canvas loop
   scenes/               marks, fields, structures, physical -- one file per family
   palettes.js           colour schemes
+  color.js              OKLab shading, gamut fitting, per-event variation
   shapes.js             mark geometry
   kit-art.js            the drawn signature on each kit card
 src/sources/
@@ -403,6 +434,9 @@ src/sources/
   wikimedia.js          Wikipedia and its editions
 server/                 zero-dependency ingest and static server
 sounds/                 sampled celesta, clavichord and string swells
+tools/
+  render.mjs            drive the real visualiser headless, out to PNG
+  make-social-preview.mjs  regenerate the card in .github/, from the engine
 demo/
   demo.js               the sandbox page
   dom.js                picker, canvas sizing and caption helpers

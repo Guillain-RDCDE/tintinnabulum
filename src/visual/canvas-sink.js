@@ -1,5 +1,6 @@
 import { rngFrom } from '../core/event.js';
 import { PALETTES, DEFAULT_PALETTE_NAME, resolvePalette } from './palettes.js';
+import { shadeOf, lighten, lightnessOf } from './color.js';
 import { SHAPES, DEFAULT_SHAPE } from './shapes.js';
 import { SCENES, DEFAULT_SCENE } from './scenes/index.js';
 
@@ -11,6 +12,7 @@ import { SCENES, DEFAULT_SCENE } from './scenes/index.js';
 // circle plus a transition per circle is thousands of DOM mutations a minute.
 
 export { PALETTES, DEFAULT_PALETTE_NAME, resolvePalette } from './palettes.js';
+export { shadeOf, lighten, lightnessOf, parseColor } from './color.js';
 export { SHAPES, SHAPE_NAMES, DEFAULT_SHAPE } from './shapes.js';
 export { SCENES, SCENE_NAMES, DEFAULT_SCENE, registerScene } from './scenes/index.js';
 
@@ -27,6 +29,16 @@ export class CanvasSink {
         ? opts.palette
         : DEFAULT_PALETTE_NAME;
     this.palette = resolvePalette(opts.palette || DEFAULT_PALETTE_NAME);
+
+    // How far each event's colour may wander from its category's. At 0 every
+    // event of a category is the same ink, which is the behaviour colour-coded
+    // reading needs; above that a category becomes a family of shades, which is
+    // what gives a dense field any depth at all. See color.js.
+    this.richness = opts.richness ?? 0.45;
+    // Gradient fills and an additive halo. Cheap on a dark ground, wrong on a
+    // light one, so it follows the palette unless asked otherwise.
+    this.depth = opts.depth !== false;
+    this._darkGround = lightnessOf(this.palette.background) < 0.5;
 
     this.life = opts.life ?? 12000; // ms a circle stays visible
     this.ringLife = opts.ringLife ?? 2200;
@@ -111,10 +123,41 @@ export class CanvasSink {
     const pad = p.r + this.margin;
     p.x = pad + p.u * Math.max(1, this.w - pad * 2);
     p.y = pad + p.v * Math.max(1, this.h - pad * 2);
+    p._grad = null; // a gradient is tied to the coordinates it was built at
+  }
+
+  /** The category's own colour, before any per-event variation. */
+  baseColorFor(category) {
+    return this.palette[category] || this.palette.default;
   }
 
   colorFor(ev) {
-    return this.palette[ev.category] || this.palette.default;
+    return this.baseColorFor(ev.category);
+  }
+
+  /**
+   * A radial gradient standing in for the flat fill, cached on the particle.
+   *
+   * Building one per mark per frame would be some fifty thousand gradients a
+   * second at a full canvas. Nothing about a mark's gradient changes once it is
+   * placed, so it is built once and dropped whenever position or colour does
+   * change -- on resize, and on a palette or richness change.
+   */
+  fillFor(ctx, p) {
+    if (!this.depth) return p.color;
+    if (p._grad) return p._grad;
+    // Deliberately shallow. A strong highlight turns every mark into a glass
+    // bead, which is a look, but not this one: the point is to keep a large
+    // disc from reading as one dead area of colour, not to render spheres.
+    const g = ctx.createRadialGradient(
+      p.x - p.r * 0.3, p.y - p.r * 0.34, p.r * 0.08,
+      p.x, p.y, p.r * 1.1
+    );
+    g.addColorStop(0, lighten(p.color, 0.07));
+    g.addColorStop(0.6, p.color);
+    g.addColorStop(1, lighten(p.color, -0.05));
+    p._grad = g;
+    return g;
   }
 
   /** The surface handed to the active scene each frame. */
@@ -129,6 +172,12 @@ export class CanvasSink {
       now,
       dt: this._dt || 16,
       scene: this._scene,
+      depth: this.depth,
+      richness: this.richness,
+      darkGround: this._darkGround,
+      // Scenes ask for a fill rather than reading p.color, so the gradient and
+      // its caching stay here instead of being copied into every scene.
+      fill: (ctx, p) => this.fillFor(ctx, p),
     };
   }
 
@@ -189,10 +238,54 @@ export class CanvasSink {
       typeof nameOrColors === 'string' && PALETTES[nameOrColors]
         ? nameOrColors
         : this.paletteName;
-    for (const p of this.particles) {
-      p.color = this.palette[p.category] || this.palette.default;
-    }
+    this._darkGround = lightnessOf(this.palette.background) < 0.5;
+    this._recolor();
     return this;
+  }
+
+  /**
+   * How far each event strays from its category's colour, 0 to 1.
+   *
+   * 0 is the old behaviour and the honest setting when colour carries meaning:
+   * every bot is the same colour, so a bot can be picked out. Above that the
+   * screen gains depth at the cost of that certainty, which is the right trade
+   * for watching a flow rather than auditing it.
+   */
+  setRichness(value) {
+    this.richness = Math.max(0, Math.min(1, Number(value) || 0));
+    this._recolor();
+    return this;
+  }
+
+  /** Gradient fills and additive halos. Off restores flat marks. */
+  setDepth(on) {
+    this.depth = Boolean(on);
+    for (const p of this.particles) p._grad = null;
+    return this;
+  }
+
+  /**
+   * Give one mark its shade and its rim.
+   *
+   * The rim moves away from the ground rather than towards a fixed colour: on
+   * a dark palette it lifts, on paper it darkens. A rim that always lightened
+   * would vanish on Daylight, which is the palette most likely to be projected.
+   */
+  _shade(p) {
+    p.color = shadeOf(p.base, p.tint || [0.5, 0.5, 0.5], this.richness);
+    // Away from the ground, but less for an already-light mark: lightening a
+    // near-white by a fixed step just draws a white ring around it.
+    const room = this._darkGround ? 1 - lightnessOf(p.color) : lightnessOf(p.color);
+    p.rim = lighten(p.color, (this._darkGround ? 0.26 : -0.26) * Math.min(1, room * 1.6));
+    p._grad = null;
+  }
+
+  /** Re-derive every mark's shade from the colour it was born with. */
+  _recolor() {
+    for (const p of this.particles) {
+      p.base = this.baseColorFor(p.category);
+      this._shade(p);
+    }
   }
 
   handle(ev) {
@@ -208,23 +301,33 @@ export class CanvasSink {
     const v = rnd();
     const rot = rnd() * Math.PI * 2;
     const pick = rnd();
+    // Drawn from the same stream, so the shade is as stable as the position:
+    // the same event always looks the same, and a palette change re-derives it
+    // rather than reshuffling the screen.
+    const tint = [rnd(), rnd(), rnd()];
+    const base = this.colorFor(ev);
     const p = {
       u,
       v,
       rot,
       pick,
+      tint,
       r,
       x: 0,
       y: 0,
       born: now,
       life: this.life,
       category: ev.category,
-      color: this.colorFor(ev),
+      base,
+      color: '',
+      rim: '',
+      _grad: null,
       alpha0: ev.dimmed ? this.dimOpacity : this.fillOpacity,
       label: ev.label || '',
       url: ev.url || '',
       ring: !ev.dimmed,
     };
+    this._shade(p);
     this._place(p);
     this.particles.push(p);
     if (this.particles.length > this.maxParticles) {

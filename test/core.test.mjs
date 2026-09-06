@@ -538,5 +538,89 @@ fakeSink.setTempo(120, 16); // sixteenths = every 0.125s
 const fine = fakeSink._onset(at(10.01));
 ok('a finer division gives a tighter grid', Math.abs(fine - 10.125) < 1e-9, String(fine));
 
+// --- perceptual colour ---------------------------------------------------
+
+{
+  const { parseColor, rgbToOklab, oklabToRgb, toOklch, fromOklch, shadeOf, lighten, lightnessOf } =
+    await import('../src/visual/color.js');
+
+  let worst = 0;
+  for (let r = 0; r <= 255; r += 15) {
+    for (let g = 0; g <= 255; g += 15) {
+      for (let b = 0; b <= 255; b += 15) {
+        const back = oklabToRgb(rgbToOklab({ r, g, b }));
+        worst = Math.max(worst, Math.abs(back.r - r), Math.abs(back.g - g), Math.abs(back.b - b));
+      }
+    }
+  }
+  ok('sRGB survives a round trip through OKLab', worst <= 1, `worst channel error ${worst}`);
+
+  ok('short hex parses', parseColor('#abc').r === 170 && parseColor('#abc').b === 204);
+  ok('rgba keeps its alpha', parseColor('rgba(41, 128, 185, 0.85)').a === 0.85);
+  ok('white and black land on the ends of the lightness axis',
+     Math.abs(lightnessOf('#ffffff') - 1) < 0.005 && lightnessOf('#000000') < 0.005);
+
+  // Richness 0 is what a colour-coded reading depends on, so it has to be an
+  // exact identity rather than merely a small change.
+  ok('richness 0 returns the colour untouched', shadeOf('#39b7a8', [0.9, 0.1, 0.7], 0) === '#39b7a8');
+  ok('shading preserves alpha', /^rgba\(/.test(shadeOf('rgba(41, 128, 185, 0.85)', [0.3, 0.6, 0.2], 0.5)));
+
+  const shades = new Set();
+  for (let i = 0; i < 300; i++) {
+    shades.add(shadeOf('#39b7a8', [(i * 7 % 300) / 300, (i * 13 % 300) / 300, (i * 29 % 300) / 300], 0.45));
+  }
+  ok('one category yields many distinct shades', shades.size > 200,
+     `${shades.size} shades from one base colour`);
+
+  // Hue must open up only at the top of the range. Measured against the base
+  // hue and wrapped: a raw min/max of atan2 reports a full circle for any base
+  // sitting near the seam, which teal does.
+  const baseHue = toOklch(rgbToOklab(parseColor('#39b7a8'))).h;
+  const swing = (k) => {
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (let i = 0; i <= 20; i++) {
+      let d = ((toOklch(rgbToOklab(parseColor(shadeOf('#39b7a8', [0.5, 0.5, i / 20], k)))).h - baseHue) * 180) / Math.PI;
+      while (d > 180) d -= 360;
+      while (d <= -180) d += 360;
+      lo = Math.min(lo, d);
+      hi = Math.max(hi, d);
+    }
+    return hi - lo;
+  };
+  ok('low richness barely moves the hue', swing(0.25) < 10, `${swing(0.25).toFixed(1)} degrees`);
+  ok('high richness opens the hue up', swing(1) > 60, `${swing(1).toFixed(1)} degrees`);
+
+  // Out-of-gamut results must lose chroma, not hue and lightness. Clipping each
+  // channel on its own turned Papyrus's near-black ink into rgb(1, 0, 0).
+  let collapsed = null;
+  for (const [name, p] of Object.entries(PALETTES)) {
+    for (const key of ['user', 'anon', 'bot', 'alert', 'default']) {
+      for (const k of [0.2, 0.45, 0.8, 1]) {
+        for (let i = 0; i < 12; i++) {
+          const out = shadeOf(p.colors[key], [(i * 7 % 12) / 12, (i * 5 % 12) / 12, i / 12], k);
+          const L = lightnessOf(out);
+          if (!Number.isFinite(parseColor(out).r) || L < 0.04 || L > 0.995) {
+            collapsed = collapsed || `${name}.${key} at richness ${k} gave ${out}`;
+          }
+        }
+      }
+    }
+  }
+  ok('no palette colour collapses when shaded', collapsed === null, collapsed || '17 palettes');
+
+  ok('lighten stays in gamut on an extreme colour',
+     Number.isFinite(parseColor(lighten('#1c1a17', 0.9)).r) && lightnessOf(lighten('#1c1a17', 0.4)) > lightnessOf('#1c1a17'));
+
+  // The reason any of this exists: `user` is the commonest category in a live
+  // feed, and it used to be a near-white in fifteen of seventeen palettes,
+  // which is what made a running screen look washed out.
+  const pale = Object.entries(PALETTES).filter(
+    ([name, p]) => name !== 'monochrome' && lightnessOf(p.colors.user) > 0.88
+  );
+  ok('no palette paints the commonest category as a near-white',
+     pale.length === 0, pale.map(([n]) => n).join(', ') || '16 palettes carry a real hue');
+}
+
 console.log(fails ? `\n${fails} FAILURE(S)` : '\nall core checks passed');
 process.exit(fails ? 1 : 0);

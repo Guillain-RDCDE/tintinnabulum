@@ -464,6 +464,41 @@ const shapePicker = createPicker(
 const repaintShapeSwatches = () => shapePicker.repaint(paintSwatch);
 requestAnimationFrame(repaintShapeSwatches);
 
+// How far each event's colour may stray from its category's. The wording says
+// what the setting costs, not just what it does: at zero a colour identifies a
+// category, and past that it stops being able to.
+const RICHNESS_STEPS = [
+  [0.001, 'off', 'Every event of a category is the exact same colour, so a colour identifies a category.'],
+  [0.25, 'subtle', 'A slight spread, enough to tell one mark from the next where they overlap.'],
+  [0.6, 'balanced', 'Each category reads as a family of shades. The default, and the best-looking on a busy feed.'],
+  [1.01, 'wide', 'Shades range far enough to drift in hue. Handsome on a dense stream, no longer a colour code.'],
+];
+
+let richnessWord = 'balanced';
+
+function selectRichness(value, persist = true) {
+  const v = Math.max(0, Math.min(1, value));
+  canvas.setRichness(v);
+  const [, word, note] = RICHNESS_STEPS.find(([edge]) => v < edge) || RICHNESS_STEPS[3];
+  richnessWord = word;
+  $('#richness-val').textContent = word;
+  $('#richness-note').textContent = note;
+  $('#richness').value = String(Math.round(v * 100));
+  if (persist) store.set('richness', String(Math.round(v * 100)));
+  updateSummaries();
+  // The palette swatches and stills are drawn through the same renderer, so
+  // they have to be redrawn or they would advertise the wrong setting.
+  repaintShapeSwatches();
+  repaintScenePreviews();
+}
+
+$('#richness').addEventListener('input', (e) => selectRichness(Number(e.target.value) / 100));
+
+$('#depth').addEventListener('change', (e) => {
+  canvas.setDepth(e.target.checked);
+  store.setFlag('depth', e.target.checked);
+});
+
 $('#starfield').addEventListener('change', (e) => {
   canvas.setStarfield(e.target.checked);
   store.setFlag('starfield', e.target.checked);
@@ -501,7 +536,8 @@ function updateSummaries() {
   $('#sum-sound').textContent =
     KITS[currentKit].label + (son.audio.tempo.bpm ? ` · ${son.audio.tempo.bpm} bpm` : '');
   $('#sum-look').textContent =
-    `${SCENES[canvas.sceneName].label} · ${PALETTES[canvas.paletteName].label}`;
+    `${SCENES[canvas.sceneName].label} · ${PALETTES[canvas.paletteName].label}` +
+    (richnessWord === 'balanced' ? '' : ` · ${richnessWord} colour`);
   $('#sum-filter').textContent =
     (cats.length === 4 ? 'Everything' : cats.join(', ') || 'Nothing') +
     (minmag > 0 ? ` · above ${minmag}` : '');
@@ -546,6 +582,9 @@ selectKit(currentKit, { persist: false, audition: false });
 selectPalette(canvas.paletteName, false);
 selectShape(store.pick('shape', SHAPE_LABELS, DEFAULT_SHAPE), false);
 selectScene(store.pick('scene', SCENES, DEFAULT_SCENE), false);
+selectRichness(store.number('richness', canvas.richness * 100, 0, 100) / 100, false);
+$('#depth').checked = store.flag('depth', true);
+canvas.setDepth($('#depth').checked);
 $('#cats').addEventListener('change', updateSummaries);
 $('#minmag').addEventListener('input', updateSummaries);
 updateSummaries();

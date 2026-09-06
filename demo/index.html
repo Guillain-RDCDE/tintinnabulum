@@ -289,6 +289,10 @@
       <div class="swatches" id="palettes"></div>
       <p class="note" id="palette-note"></p>
 
+      <label class="field"><span>Colour variety <span id="richness-val">balanced</span></span>
+        <input type="range" id="richness" min="0" max="100" value="45"></label>
+      <p class="note" id="richness-note"></p>
+
       <p class="sub-label" id="shapes-label">Shapes</p>
       <div class="swatches" id="shapes"></div>
       <p class="note" id="shape-note"></p>
@@ -297,6 +301,7 @@
         <summary>Advanced</summary>
         <div class="more-body">
           <div>
+            <label class="check"><input type="checkbox" id="depth" checked> Shaded marks with an outline</label>
             <label class="check"><input type="checkbox" id="starfield"> Starry sky</label>
             <label class="check"><input type="checkbox" id="labels" checked> Show titles on new events</label>
             <label class="check"><input type="checkbox" id="hud" checked> Show the rate counter</label>

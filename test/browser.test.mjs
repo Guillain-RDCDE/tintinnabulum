@@ -435,6 +435,103 @@ const painted = await page.evaluate(() => {
 ok('canvas surface has painted pixels', painted.distinct > 5,
    `bright samples=${painted.distinct} size=${painted.w}x${painted.h}`);
 
+// --- colour variety, measured on the canvas itself ----------------------
+// The point of the richness setting is what reaches the screen, so count what
+// is actually on it rather than trusting the setting was applied.
+const variety = await page.evaluate(async () => {
+  const son = window.son;
+  const sink = son.sinks.find((s) => s.particles);
+  const c = document.querySelector('#canvas');
+  const ctx = c.getContext('2d');
+
+  const count = async (richness) => {
+    sink.setRichness(richness);
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const { data } = ctx.getImageData(0, 0, c.width, Math.min(c.height, 400));
+    const seen = new Set();
+    for (let i = 0; i < data.length; i += 4) {
+      // Ignore the ground, which is most of the canvas and one colour.
+      if (data[i] < 40 && data[i + 1] < 40 && data[i + 2] < 45) continue;
+      seen.add((data[i] << 16) | (data[i + 1] << 8) | data[i + 2]);
+    }
+    return seen.size;
+  };
+
+  const flat = await count(0);
+  const varied = await count(0.6);
+  sink.setRichness(0.45);
+  return { flat, varied };
+});
+ok('raising colour variety puts more colours on the canvas',
+   variety.varied > variety.flat * 1.5,
+   `flat=${variety.flat} varied=${variety.varied}`);
+
+// A first-time viewer must land on the default, not on whatever an absent
+// stored value happens to coerce to.
+const richnessDefault = await page.evaluate(() => ({
+  sink: window.son.sinks.find((s) => s.particles).richness,
+  word: document.querySelector('#richness-val').textContent,
+  slider: document.querySelector('#richness').value,
+}));
+ok('colour variety starts at its default rather than off',
+   richnessDefault.word === 'balanced' && richnessDefault.slider === '45',
+   `${richnessDefault.word} at ${richnessDefault.slider}`);
+
+const richnessUi = await page.evaluate(async () => {
+  const slider = document.querySelector('#richness');
+  const sink = window.son.sinks.find((s) => s.particles);
+  slider.value = '0';
+  slider.dispatchEvent(new Event('input', { bubbles: true }));
+  const off = { r: sink.richness, word: document.querySelector('#richness-val').textContent };
+  slider.value = '100';
+  slider.dispatchEvent(new Event('input', { bubbles: true }));
+  const wide = { r: sink.richness, word: document.querySelector('#richness-val').textContent };
+  slider.value = '45';
+  slider.dispatchEvent(new Event('input', { bubbles: true }));
+  return { off, wide, summary: document.querySelector('#sum-look').textContent };
+});
+ok('the colour-variety slider reaches the renderer',
+   richnessUi.off.r === 0 && richnessUi.wide.r === 1,
+   `${richnessUi.off.r} then ${richnessUi.wide.r}`);
+ok('the slider says what it is set to in words',
+   richnessUi.off.word === 'off' && richnessUi.wide.word === 'wide',
+   `${richnessUi.off.word} / ${richnessUi.wide.word}`);
+
+const depthUi = await page.evaluate(() => {
+  const box = document.querySelector('#depth');
+  const sink = window.son.sinks.find((s) => s.particles);
+  const started = sink.depth;
+  box.checked = false;
+  box.dispatchEvent(new Event('change', { bubbles: true }));
+  const off = sink.depth;
+  box.checked = true;
+  box.dispatchEvent(new Event('change', { bubbles: true }));
+  return { started, off, back: sink.depth };
+});
+ok('shaded marks are on by default and can be turned off',
+   depthUi.started === true && depthUi.off === false && depthUi.back === true);
+
+// A mark carries the shade it was born with, so changing palette must re-derive
+// it rather than reshuffling the screen or dropping back to flat colour.
+const recolour = await page.evaluate(async () => {
+  const sink = window.son.sinks.find((s) => s.particles);
+  const was = sink.paletteName;
+  const before = sink.particles.slice(0, 8).map((p) => ({ tint: p.tint, color: p.color }));
+  sink.setPalette('neon');
+  const after = sink.particles.slice(0, 8).map((p) => ({ tint: p.tint, color: p.color }));
+  sink.setPalette(was);
+  const restored = sink.particles.slice(0, 8).map((p) => p.color);
+  return {
+    tintsKept: before.every((b, i) => String(b.tint) === String(after[i].tint)),
+    changed: before.some((b, i) => b.color !== after[i].color),
+    restored: before.every((b, i) => b.color === restored[i]),
+    n: before.length,
+  };
+});
+ok('a palette change re-derives shades from the same per-event tint',
+   recolour.n > 0 && recolour.tintsKept && recolour.changed && recolour.restored,
+   `n=${recolour.n} tints kept=${recolour.tintsKept} changed=${recolour.changed} restored=${recolour.restored}`);
+
 // --- voice stealing under real load -------------------------------------
 const flood = await page.evaluate(async () => {
   const son = window.son;

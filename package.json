@@ -20,7 +20,8 @@
   "scripts": {
     "serve": "node server/ingest.mjs",
     "test": "node test/core.test.mjs && node test/server.test.mjs",
-    "test:browser": "node test/browser.test.mjs"
+    "test:browser": "node test/browser.test.mjs",
+    "social": "node tools/make-social-preview.mjs"
   },
   "keywords": [
     "sonification",

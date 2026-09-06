@@ -19,7 +19,7 @@ export const PALETTES = {
     colors: {
       background: '#1c2733',
       default: '#ffffff',
-      user: '#ffffff',
+      user: '#5dade2',
       anon: '#2ecc71',
       bot: '#9b59b6',
       alert: '#e67e22',
@@ -35,7 +35,7 @@ export const PALETTES = {
     colors: {
       background: '#14100c',
       default: '#f2e2c4',
-      user: '#f2e2c4',
+      user: '#5fb3a3',
       anon: '#d9a441',
       bot: '#8a4a26',
       alert: '#ff4d2e',
@@ -51,7 +51,7 @@ export const PALETTES = {
     colors: {
       background: '#071a1c',
       default: '#d7fff4',
-      user: '#d7fff4',
+      user: '#5ad1ff',
       anon: '#35e0a1',
       bot: '#7b6cf6',
       alert: '#ff7ab6',
@@ -67,7 +67,7 @@ export const PALETTES = {
     colors: {
       background: '#1a0f0b',
       default: '#ffd9a8',
-      user: '#ffd9a8',
+      user: '#6a9fb5',
       anon: '#ff8c42',
       bot: '#a8302c',
       alert: '#ffc300',
@@ -83,7 +83,7 @@ export const PALETTES = {
     colors: {
       background: '#0d0518',
       default: '#f0e6ff',
-      user: '#f0e6ff',
+      user: '#a3e635',
       anon: '#0891b2',
       bot: '#c026d3',
       alert: '#fbbf24',
@@ -99,7 +99,7 @@ export const PALETTES = {
     colors: {
       background: '#0b1f33',
       default: '#f1f5f9',
-      user: '#f1f5f9',
+      user: '#2dd4bf',
       anon: '#38bdf8',
       bot: '#818cf8',
       alert: '#f59e0b',
@@ -115,7 +115,7 @@ export const PALETTES = {
     colors: {
       background: '#1b1020',
       default: '#fdf7fb',
-      user: '#fdf7fb',
+      user: '#7ec98f',
       anon: '#ff9ec7',
       bot: '#8b5cf6',
       alert: '#ffd166',
@@ -131,7 +131,7 @@ export const PALETTES = {
     colors: {
       background: '#f4f1ea',
       default: '#2f3a45',
-      user: '#2f3a45',
+      user: '#1d5fa8',
       anon: '#12805f',
       bot: '#7c3aed',
       alert: '#dc2626',
@@ -147,7 +147,7 @@ export const PALETTES = {
     colors: {
       background: '#0f1720',
       default: '#eef4f8',
-      user: '#eef4f8',
+      user: '#8fb339',
       anon: '#4aa8c0',
       bot: '#8a7a63',
       alert: '#ffb454',
@@ -163,7 +163,7 @@ export const PALETTES = {
     colors: {
       background: '#04141c',
       default: '#dff3f4',
-      user: '#dff3f4',
+      user: '#f4795b',
       anon: '#39b7a8',
       bot: '#186b86',
       alert: '#ffd25e',
@@ -179,7 +179,7 @@ export const PALETTES = {
     colors: {
       background: '#0e0a0a',
       default: '#f4ece0',
-      user: '#f4ece0',
+      user: '#00a878',
       anon: '#e03a26',
       bot: '#7d7468',
       alert: '#e8b44a',
@@ -195,7 +195,7 @@ export const PALETTES = {
     colors: {
       background: '#0a1020',
       default: '#fff4dc',
-      user: '#fff4dc',
+      user: '#7ed957',
       anon: '#ffb02e',
       bot: '#c25a1c',
       alert: '#5ec8e5',
@@ -211,7 +211,7 @@ export const PALETTES = {
     colors: {
       background: '#14101f',
       default: '#ffe8d6',
-      user: '#ffe8d6',
+      user: '#5b7cfa',
       anon: '#ff6b6b',
       bot: '#4ecdc4',
       alert: '#ffd23f',
@@ -227,7 +227,7 @@ export const PALETTES = {
     colors: {
       background: '#05050a',
       default: '#f2f2f2',
-      user: '#f2f2f2',
+      user: '#ff8c1a',
       anon: '#ff2e88',
       bot: '#00c8e0',
       alert: '#c6ff00',
@@ -243,7 +243,7 @@ export const PALETTES = {
     colors: {
       background: '#101c1e',
       default: '#ece5d8',
-      user: '#ece5d8',
+      user: '#c47a9a',
       anon: '#d97742',
       bot: '#3f8f92',
       alert: '#f2c14e',
@@ -259,7 +259,7 @@ export const PALETTES = {
     colors: {
       background: '#f2ead8',
       default: '#1c1a17',
-      user: '#1c1a17',
+      user: '#4a6b2a',
       anon: '#2e7d9a',
       bot: '#b3243c',
       alert: '#e08a00',

@@ -9,25 +9,43 @@ export const MARK_SCENES = {
     label: 'Bloom',
     note: 'The original: each event opens once and fades, with a shockwave in its own shape.',
     frame(ctx, api) {
+      const rule = isHollow(api.shape) ? 'evenodd' : 'nonzero';
+
+      // Three passes rather than three operations per mark. Each pass sets the
+      // compositing mode once; interleaving them would set it a few thousand
+      // times a second to no visible end.
+
       for (const p of api.particles) {
         const age = api.now - p.born;
-        const fade = 1 - age / p.life;
+        if (!p.ring || age >= api.ringLife) continue;
+        const t = Math.sqrt(age / api.ringLife);
+        ctx.globalAlpha = (1 - t) * 0.35;
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        drawShape(ctx, api.shape, p.x, p.y, p.r + 20 + t * 20, p.rot, p.pick);
+        ctx.stroke();
+      }
 
-        if (p.ring && age < api.ringLife) {
-          const t = Math.sqrt(age / api.ringLife);
-          ctx.globalAlpha = (1 - t) * 0.35;
-          ctx.strokeStyle = p.color;
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          drawShape(ctx, api.shape, p.x, p.y, p.r + 20 + t * 20, p.rot, p.pick);
-          ctx.stroke();
-        }
-
+      for (const p of api.particles) {
+        const fade = 1 - (api.now - p.born) / p.life;
         ctx.globalAlpha = p.alpha0 * fade;
-        ctx.fillStyle = p.color;
+        ctx.fillStyle = api.fill(ctx, p);
         ctx.beginPath();
         drawShape(ctx, api.shape, p.x, p.y, p.r, p.rot, p.pick);
-        ctx.fill(isHollow(api.shape) ? 'evenodd' : 'nonzero');
+        ctx.fill(rule);
+
+        // A rim, and the single most useful line here. Translucent discs piled
+        // on one another average towards a fog in which no disc has an edge;
+        // that averaging is what "pale" actually means. Drawing the boundary
+        // gives every mark back its outline, so a dense field reads as many
+        // things overlapping rather than one wash.
+        if (api.depth && p.r > 4) {
+          ctx.globalAlpha = Math.min(1, fade * 0.5);
+          ctx.strokeStyle = p.rim;
+          ctx.lineWidth = Math.max(1, Math.min(2, p.r * 0.04));
+          ctx.stroke();
+        }
       }
     },
   },
