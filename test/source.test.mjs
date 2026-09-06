@@ -17,7 +17,8 @@ const PROFILES = fileURLToPath(new URL('../profiles', import.meta.url));
 const SOURCES = fileURLToPath(new URL('../sources', import.meta.url));
 
 let fails = 0;
-const ok = (n, c, x = '') => { if (!c) { fails++; console.log('FAIL  ' + n + (x ? '  ' + x : '')); } else console.log('ok    ' + n + (x ? '  ' + x : '')); };
+const failedNames = [];
+const ok = (n, c, x = '') => { if (!c) { fails++; failedNames.push(n); console.log('FAIL  ' + n + (x ? '  ' + x : '')); } else console.log('ok    ' + n + (x ? '  ' + x : '')); };
 const readProfile = (n) => compileProfile(JSON.parse(fs.readFileSync(`${PROFILES}/${n}.json`, 'utf8')));
 const readSource = (n) => JSON.parse(fs.readFileSync(`${SOURCES}/${n}.json`, 'utf8'));
 
@@ -288,5 +289,5 @@ try {
   await new Promise((r) => (srv.exitCode !== null ? r() : srv.once('exit', r)));
 }
 
-console.log(fails ? `\n${fails} FAILURE(S)` : '\nall source checks passed');
+console.log(fails ? `\n${fails} FAILURE(S): ${failedNames.join(' | ')}` : '\nall source checks passed');
 process.exitCode = fails ? 1 : 0;

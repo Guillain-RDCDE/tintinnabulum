@@ -6,7 +6,8 @@ const DIR = fileURLToPath(new URL('../profiles', import.meta.url));
 import { compileProfile, validateProfile, profileFromQuery, ProfileError } from '../src/core/profile.js';
 
 let fails = 0;
-const ok = (n, c, x = '') => { if (!c) { fails++; console.log('FAIL  ' + n + (x ? '  ' + x : '')); } else console.log('ok    ' + n + (x ? '  ' + x : '')); };
+const failedNames = [];
+const ok = (n, c, x = '') => { if (!c) { fails++; failedNames.push(n); console.log('FAIL  ' + n + (x ? '  ' + x : '')); } else console.log('ok    ' + n + (x ? '  ' + x : '')); };
 
 // Every shipped profile must compile and produce a usable event from a
 // realistic payload. A profile that does not is a standard telling a lie.
@@ -88,5 +89,5 @@ const qp = compileProfile(q);
 ok('and it applies', qp.apply({ duration_ms: 33 }).event.magnitude === 33);
 ok('no mapping parameters means no profile', profileFromQuery(new URLSearchParams('replay=5')) === null);
 
-console.log(fails ? `\n${fails} FAILURE(S)` : '\nall profile checks passed');
+console.log(fails ? `\n${fails} FAILURE(S): ${failedNames.join(' | ')}` : '\nall profile checks passed');
 process.exitCode = fails ? 1 : 0;

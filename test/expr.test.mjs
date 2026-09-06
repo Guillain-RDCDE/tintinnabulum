@@ -5,8 +5,9 @@
 import { compile, check, ExprError, EXPR_LIMITS } from '../src/core/expr.js';
 
 let fails = 0;
+const failedNames = [];
 const ok = (name, cond, extra = '') => {
-  if (!cond) { fails++; console.log('FAIL  ' + name + (extra ? '  ' + extra : '')); }
+  if (!cond) { fails++; failedNames.push(name); console.log('FAIL  ' + name + (extra ? '  ' + extra : '')); }
   else console.log('ok    ' + name + (extra ? '  ' + extra : ''));
 };
 const run = (src, payload) => compile(src)(payload);
@@ -109,5 +110,5 @@ ok('check rejects a bad one with a reason', !bad.ok && typeof bad.error === 'str
 ok('unknown function names the problem', /unknown function/.test(rejects('nope(1)', P).msg || ''));
 ok('a bare word suggests the fix', /did you mean \$\./.test(rejects('duration_ms', P).msg || ''));
 
-console.log(fails ? `\n${fails} FAILURE(S)` : '\nall expression checks passed');
+console.log(fails ? `\n${fails} FAILURE(S): ${failedNames.join(' | ')}` : '\nall expression checks passed');
 process.exitCode = fails ? 1 : 0;

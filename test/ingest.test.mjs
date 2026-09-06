@@ -12,7 +12,8 @@ for (let i = 0; i < 80; i++) {
 }
 
 let fails = 0;
-const ok = (n, c, x = '') => { if (!c) { fails++; console.log('FAIL  ' + n + (x ? '  ' + x : '')); } else console.log('ok    ' + n + (x ? '  ' + x : '')); };
+const failedNames = [];
+const ok = (n, c, x = '') => { if (!c) { fails++; failedNames.push(n); console.log('FAIL  ' + n + (x ? '  ' + x : '')); } else console.log('ok    ' + n + (x ? '  ' + x : '')); };
 const post = async (p, body) => {
   const r = await fetch(BASE + p, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   return { status: r.status, body: await r.json() };
@@ -101,5 +102,5 @@ try {
   await new Promise((r) => (srv.exitCode !== null ? r() : srv.once('exit', r)));
 }
 
-console.log(fails ? `\n${fails} FAILURE(S)` : '\nall ingest checks passed');
+console.log(fails ? `\n${fails} FAILURE(S): ${failedNames.join(' | ')}` : '\nall ingest checks passed');
 process.exitCode = fails ? 1 : 0;

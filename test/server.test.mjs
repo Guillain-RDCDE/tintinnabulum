@@ -7,9 +7,10 @@ const PORT = Number(process.env.TEST_PORT || 8791);
 const BASE = `http://127.0.0.1:${PORT}`;
 
 let fails = 0;
+const failedNames = [];
 const ok = (n, c, x = '') => {
   if (!c) {
-    fails++;
+    fails++; failedNames.push(n);
     console.log('FAIL  ' + n + (x ? '  ' + x : ''));
   } else console.log('ok    ' + n + (x ? '  ' + x : ''));
 };
@@ -140,5 +141,5 @@ ok('CORS is open', idx.headers.get('access-control-allow-origin') === '*');
 ac.abort();
 await streamDone;
 srv.kill();
-console.log(fails ? `\n${fails} FAILURE(S)` : '\nall server checks passed');
+console.log(fails ? `\n${fails} FAILURE(S): ${failedNames.join(' | ')}` : '\nall server checks passed');
 process.exit(fails ? 1 : 0);

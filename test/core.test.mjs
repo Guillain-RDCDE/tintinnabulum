@@ -12,9 +12,10 @@ import {
 } from '../src/visual/palettes.js';
 
 let fails = 0;
+const failedNames = [];
 const ok = (name, cond, extra = '') => {
   if (!cond) {
-    fails++;
+    fails++; failedNames.push(name);
     console.log('FAIL  ' + name + (extra ? '  ' + extra : ''));
   } else console.log('ok    ' + name + (extra ? '  ' + extra : ''));
 };
@@ -622,5 +623,5 @@ ok('a finer division gives a tighter grid', Math.abs(fine - 10.125) < 1e-9, Stri
      pale.length === 0, pale.map(([n]) => n).join(', ') || '16 palettes carry a real hue');
 }
 
-console.log(fails ? `\n${fails} FAILURE(S)` : '\nall core checks passed');
+console.log(fails ? `\n${fails} FAILURE(S): ${failedNames.join(' | ')}` : '\nall core checks passed');
 process.exit(fails ? 1 : 0);

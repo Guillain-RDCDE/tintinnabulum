@@ -32,9 +32,10 @@ const BASE = process.env.TEST_BASE || `http://127.0.0.1:${PORT}`;
 const USE_LOCAL_SERVER = !process.env.TEST_BASE;
 
 let fails = 0;
+const failedNames = [];
 const ok = (n, c, x = '') => {
   if (!c) {
-    fails++;
+    fails++; failedNames.push(n);
     console.log('FAIL  ' + n + (x ? '  ' + x : ''));
   } else console.log('ok    ' + n + (x ? '  ' + x : ''));
 };
@@ -1304,5 +1305,5 @@ await mobile.close();
 
 await browser.close();
 if (srv) srv.kill();
-console.log(fails ? `\n${fails} FAILURE(S)` : '\nall browser checks passed');
+console.log(fails ? `\n${fails} FAILURE(S): ${failedNames.join(' | ')}` : '\nall browser checks passed');
 process.exit(fails ? 1 : 0);
