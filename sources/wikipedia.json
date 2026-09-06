@@ -1,0 +1,14 @@
+{
+  "source": "tintinnabulum.source/1",
+  "name": "wikipedia",
+  "description": "Every edit across every Wikimedia wiki, from Wikimedia's own public EventStreams endpoint.",
+  "enabled": false,
+  "stream": {
+    "url": "https://stream.wikimedia.org/v2/stream/recentchange",
+    "protocol": "sse",
+    "maxPerSecond": 25,
+    "dedupeSize": 0
+  },
+  "key": "str($.meta.id)",
+  "profile": "wikimedia-change"
+}

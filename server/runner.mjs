@@ -18,6 +18,46 @@ export class SourceRunner {
     this.running = new Map(); // name -> state
   }
 
+  /**
+   * Follow a list of identities to the records they name.
+   *
+   * The second half of a two-stage source: `items` selected the identities,
+   * and each is substituted into `expand.url`. Requests go out a few at a
+   * time rather than all at once, because a hundred simultaneous connections
+   * is how a polite poll becomes an attack. Failures are dropped, not thrown:
+   * one unreachable record should cost that record and nothing else.
+   */
+  async expand(src, ids, seen) {
+    const wanted = [];
+    for (const id of ids) {
+      const k = String(id);
+      if (seen && seen.has(k)) continue;
+      wanted.push(k);
+      if (wanted.length >= src.expand.limit) break;
+    }
+    const out = [];
+    for (let i = 0; i < wanted.length; i += src.expand.concurrency) {
+      const slice = wanted.slice(i, i + src.expand.concurrency);
+      const got = await Promise.all(
+        slice.map(async (id) => {
+          const url = src.expand.url.replaceAll('${item}', encodeURIComponent(id));
+          const ctrl = new AbortController();
+          const t = setTimeout(() => ctrl.abort(), src.timeout);
+          try {
+            const res = await fetch(url, { headers: { Accept: 'application/json', ...src.headers }, signal: ctrl.signal });
+            return res.ok ? await res.json() : null;
+          } catch (e) {
+            return null;
+          } finally {
+            clearTimeout(t);
+          }
+        })
+      );
+      out.push(...got.filter((x) => x != null));
+    }
+    return out;
+  }
+
   /** Fetch once, honouring the declared timeout. */
   async fetchOnce(src) {
     const ctrl = new AbortController();
@@ -54,7 +94,8 @@ export class SourceRunner {
    * many items were found, what the first one became, and why nothing appeared
    * if nothing did.
    */
-  async test(src) {
+  async test(src, { seconds = 8 } = {}) {
+    if (src.streaming) return this.testStream(src, seconds);
     const r = await this.fetchOnce(src);
     if (!r.ok) {
       return {
@@ -65,7 +106,15 @@ export class SourceRunner {
         sample: r.sample,
       };
     }
-    const { events, problems } = src.extract(r.body);
+    let events, problems;
+    if (src.expand) {
+      const ids = src.select(r.body);
+      const records = await this.expand(src, ids.slice(0, 5), null);
+      ({ events, problems } = src.mapAll(records));
+      problems = [...problems, ...(ids.length && !records.length ? ['"items" found identities but none could be fetched through "expand.url"'] : [])];
+    } else {
+      ({ events, problems } = src.extract(r.body));
+    }
     return {
       name: src.name,
       fetched: true,
@@ -83,6 +132,71 @@ export class SourceRunner {
         : r.body && typeof r.body === 'object'
           ? `object with keys: ${Object.keys(r.body).slice(0, 12).join(', ')}`
           : typeof r.body,
+    };
+  }
+
+  /**
+   * Listen for a few seconds and report, without emitting anything.
+   *
+   * A stream cannot be tested by fetching once, and a connector author needs
+   * the same answer either way: did it connect, did anything arrive, and what
+   * did the first message become. Messages seen but mapped to nothing are
+   * counted separately from messages never received -- the two have completely
+   * different causes, and conflating them sends people hunting the wrong one.
+   */
+  async testStream(src, seconds) {
+    const captured = [];
+    let received = 0;
+    let firstProblems = [];
+    const probe = {
+      ...src,
+      dedupeSize: 0,
+      maxPerSecond: 0,
+      extract(body) {
+        received++;
+        const out = src.extract(body);
+        if (!out.events.length && out.problems.length && !firstProblems.length) {
+          firstProblems = out.problems;
+        }
+        return out;
+      },
+    };
+    const state = {
+      source: probe, seen: new Set(), order: [], timers: new Set(),
+      polls: 0, emitted: 0, dropped: 0, failures: 0, lastError: null,
+      lastProblems: [], stopped: false, loop: null, socket: null, abort: null,
+      windowAt: 0, inWindow: 0,
+    };
+    const keep = this.emit;
+    this.emit = (raw) => { if (captured.length < 5) captured.push(raw); };
+    try {
+      this._openStream(state);
+      const deadline = Date.now() + seconds * 1000;
+      while (Date.now() < deadline && captured.length < 3) {
+        await new Promise((r) => setTimeout(r, 200));
+      }
+    } finally {
+      this.emit = keep;
+      state.stopped = true;
+      try { if (state.socket) state.socket.close(); } catch (e) {}
+      try { if (state.abort) state.abort.abort(); } catch (e) {}
+      if (state.loop) clearTimeout(state.loop);
+    }
+
+    return {
+      name: src.name,
+      streaming: true,
+      protocol: src.protocol,
+      connected: state.failures === 0 && !state.lastError,
+      messages: received,
+      found: captured.length,
+      profile: src.profileName,
+      problems: [
+        ...(state.lastError ? [state.lastError] : []),
+        ...(received === 0 ? [`no message arrived in ${seconds}s -- check the url, and whether this feed needs a subscribe message`] : []),
+        ...(received > 0 && captured.length === 0 ? [`${received} messages arrived but none became an event`, ...firstProblems] : []),
+      ],
+      first: captured[0] ? { key: captured[0].id, event: captured[0] } : null,
     };
   }
 
@@ -108,7 +222,20 @@ export class SourceRunner {
     state.lastError = null;
     state.nextDelay = src.interval;
 
-    const { events, problems } = src.extract(r.body);
+    let events, problems;
+    if (src.expand) {
+      const ids = src.select(r.body);
+      const records = await this.expand(src, ids, state.seen);
+      ({ events, problems } = src.mapAll(records));
+      // Identities are remembered here rather than after mapping, so a record
+      // that fails to map is not fetched again on every single poll.
+      for (const id of ids.slice(0, src.expand.limit)) {
+        const k = String(id);
+        if (!state.seen.has(k)) { state.seen.add(k); state.order.push(k); }
+      }
+    } else {
+      ({ events, problems } = src.extract(r.body));
+    }
     state.lastProblems = problems;
 
     const fresh = [];
@@ -140,14 +267,154 @@ export class SourceRunner {
     });
   }
 
+  /**
+   * Hand one message from a live connection to the profile and emit it.
+   *
+   * Shared by both stream protocols, and by the poll path's own extraction, so
+   * a descriptor behaves identically however the bytes arrived.
+   */
+  _consume(state, body) {
+    const src = state.source;
+    const { events, problems } = src.extract(body);
+    state.lastProblems = problems;
+    for (const e of events) {
+      if (src.dedupeSize > 0) {
+        if (state.seen.has(e.key)) continue;
+        state.seen.add(e.key);
+        state.order.push(e.key);
+        while (state.order.length > src.dedupeSize) state.seen.delete(state.order.shift());
+      }
+      // A firehose can outrun the ears and the screen both. The ceiling is
+      // the descriptor's own, and dropping here rather than downstream keeps
+      // the cost off the renderer entirely.
+      if (src.maxPerSecond > 0) {
+        const now = Date.now();
+        if (now - state.windowAt >= 1000) { state.windowAt = now; state.inWindow = 0; }
+        if (state.inWindow >= src.maxPerSecond) { state.dropped++; continue; }
+        state.inWindow++;
+      }
+      state.emitted++;
+      this.emit(e.raw);
+    }
+  }
+
+  /**
+   * Hold a connection open, and put it back when it drops.
+   *
+   * Reconnection is not optional: a socket that has been up for a day will
+   * close, and a feed that silently stops is worse than one that never
+   * started. The delay grows with consecutive failures so a server that is
+   * down is not hammered while it recovers.
+   */
+  _openStream(state) {
+    const src = state.source;
+    if (state.stopped) return;
+
+    const retry = () => {
+      if (state.stopped) return;
+      state.failures++;
+      const wait = Math.min(src.reconnect * 2 ** Math.min(state.failures - 1, 6), 5 * 60000);
+      state.nextDelay = wait;
+      const t = setTimeout(() => this._openStream(state), wait);
+      if (t.unref) t.unref();
+      state.loop = t;
+    };
+
+    if (src.protocol === 'websocket') {
+      let ws;
+      try {
+        ws = new WebSocket(src.resolvedUrl);
+      } catch (e) {
+        state.lastError = String(e.message);
+        return retry();
+      }
+      state.socket = ws;
+      ws.addEventListener('open', () => {
+        state.failures = 0;
+        state.lastError = null;
+        state.connectedAt = Date.now();
+        for (const msg of src.subscribe) {
+          try { ws.send(JSON.stringify(msg)); } catch (e) { /* the close handler retries */ }
+        }
+        this.log(`source ${src.name}: connected to ${src.url}`);
+      });
+      ws.addEventListener('message', (ev) => {
+        state.polls++;
+        let body = null;
+        try { body = JSON.parse(typeof ev.data === 'string' ? ev.data : String(ev.data)); }
+        catch (e) { return; } // a heartbeat or a non-JSON frame is not an error
+        try { this._consume(state, body); } catch (e) { state.lastError = String(e.message); }
+      });
+      ws.addEventListener('error', () => { state.lastError = 'socket error'; });
+      ws.addEventListener('close', () => {
+        state.socket = null;
+        if (!state.stopped) {
+          this.log(`source ${src.name}: connection closed, reconnecting`);
+          retry();
+        }
+      });
+      return;
+    }
+
+    // Server-Sent Events, read straight off the response body.
+    const ctrl = new AbortController();
+    state.abort = ctrl;
+    fetch(src.resolvedUrl, {
+      headers: { Accept: 'text/event-stream', ...src.headers },
+      signal: ctrl.signal,
+    })
+      .then(async (res) => {
+        if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+        state.failures = 0;
+        state.lastError = null;
+        state.connectedAt = Date.now();
+        this.log(`source ${src.name}: streaming ${src.url}`);
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          // Events are separated by a blank line; only `data:` carries payload.
+          let cut;
+          while ((cut = buffer.indexOf('\n\n')) >= 0) {
+            const frame = buffer.slice(0, cut);
+            buffer = buffer.slice(cut + 2);
+            const data = frame
+              .split('\n')
+              .filter((l) => l.startsWith('data:'))
+              .map((l) => l.slice(5).trim())
+              .join('');
+            if (!data) continue;
+            state.polls++;
+            try { this._consume(state, JSON.parse(data)); } catch (e) { /* not JSON */ }
+          }
+        }
+        throw new Error('stream ended');
+      })
+      .catch((e) => {
+        if (state.stopped) return;
+        state.lastError = String(e.message);
+        retry();
+      });
+  }
+
   start(src) {
     if (this.running.has(src.name)) this.stop(src.name);
     const state = {
       source: src, seen: new Set(), order: [], timers: new Set(),
-      polls: 0, emitted: 0, failures: 0, lastAt: 0, lastError: null,
+      polls: 0, emitted: 0, dropped: 0, failures: 0, lastAt: 0, lastError: null,
       lastProblems: [], nextDelay: src.interval, stopped: false, loop: null,
+      socket: null, abort: null, connectedAt: 0, windowAt: 0, inWindow: 0,
     };
     this.running.set(src.name, state);
+
+    if (src.streaming) {
+      this._openStream(state);
+      this.log(`source ${src.name}: holding ${src.protocol} open to ${src.url}`);
+      return state;
+    }
 
     const cycle = async () => {
       if (state.stopped) return;
@@ -172,6 +439,8 @@ export class SourceRunner {
     if (!state) return false;
     state.stopped = true;
     if (state.loop) clearTimeout(state.loop);
+    try { if (state.socket) state.socket.close(); } catch (e) { /* already gone */ }
+    try { if (state.abort) state.abort.abort(); } catch (e) { /* already gone */ }
     for (const t of state.timers) clearTimeout(t);
     state.timers.clear();
     this.running.delete(name);
@@ -194,6 +463,9 @@ export class SourceRunner {
       lastProblems: s.lastProblems,
       lastAt: s.lastAt || null,
       pending: s.timers.size,
+      streaming: s.source.streaming,
+      connected: s.source.streaming ? Boolean(s.socket || s.abort) && s.failures === 0 : undefined,
+      dropped: s.dropped || 0,
     };
   }
 }

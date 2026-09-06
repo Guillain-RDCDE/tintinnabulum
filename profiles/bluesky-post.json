@@ -1,0 +1,15 @@
+{
+  "profile": "tintinnabulum.mapping/1",
+  "name": "bluesky-post",
+  "description": "Posts from the Bluesky jetstream, pitched by length. Labels carry the size rather than the text: an unfiltered firehose is not something to put on a screen unasked.",
+  "where": "$.kind == 'commit' and $.commit.operation == 'create' and $.commit.record.text != null",
+  "map": {
+    "magnitude": "max(len($.commit.record.text), 1)",
+    "polarity": { "const": 1 },
+    "id": "$.did + '/' + $.commit.rkey",
+    "label": "str(len($.commit.record.text)) + ' characters'",
+    "category": "$.commit.record.reply != null ? 'anon' : 'user'",
+    "ts": "epoch($.time_us / 1000)",
+    "source": { "const": "bluesky" }
+  }
+}

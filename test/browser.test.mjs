@@ -104,25 +104,36 @@ const openMore = async (sel) => {
   }, sel);
 };
 
-const PANELS = ['#sec-listen', '#sec-sound', '#sec-look', '#sec-filter', '#sec-activity'];
+const PANELS = ['#sec-listen', '#sec-sound', '#sec-look', '#sec-connect', '#sec-filter', '#sec-activity'];
 for (const sec of PANELS) {
   ok(`${sec.replace('#sec-', '')} is on the page from the start`,
      await page.locator(sec).isVisible());
 }
 ok('there is a single obvious start button', await page.locator('#start').isVisible());
 
-// The page opens as five folded rows and one button, so it stays short no
-// matter how many feeds, kits, palettes and scenes exist behind them.
+// The page opens as folded rows and one button, so it stays short no matter
+// how many feeds, kits, palettes and scenes exist behind them.
 const folded = await page.evaluate((sels) =>
   sels.map((s) => ({ id: s, open: document.querySelector(s).open })), PANELS);
 ok('every panel starts folded', folded.every((p) => !p.open), folded.filter((p) => p.open).map((p) => p.id).join(', '));
 
-const panelHeight = await page.evaluate(() => document.querySelector('main').getBoundingClientRect().height);
-ok('the folded page is short', panelHeight < 600, Math.round(panelHeight) + 'px of settings');
+// A fixed ceiling on the total was the wrong guard: adding a sixth panel
+// pushed it over by five pixels, which says nothing about whether folding
+// works. What matters is that a folded panel stays one compact row, so the
+// page grows by a row per panel and never by a section.
+const folding = await page.evaluate((sels) => ({
+  total: document.querySelector('main').getBoundingClientRect().height,
+  rows: sels.map((s) => Math.round(document.querySelector(s).getBoundingClientRect().height)),
+}), PANELS);
+ok('every folded panel is a single compact row',
+   folding.rows.every((h) => h <= 80), folding.rows.join(', ') + 'px');
+ok('the folded page fits a phone screen without scrolling far',
+   folding.total < 80 * PANELS.length + 260,
+   Math.round(folding.total) + 'px for ' + PANELS.length + ' panels');
 
 // Each header states its own value, so the whole configuration reads at a glance.
 const summaries = await page.evaluate(() =>
-  ['listen', 'sound', 'look', 'filter'].map((k) => document.querySelector('#sum-' + k).textContent.trim()));
+  ['listen', 'sound', 'look', 'connect', 'filter'].map((k) => document.querySelector('#sum-' + k).textContent.trim()));
 ok('each folded panel shows its current setting', summaries.every((s) => s.length > 0), summaries.join(' | '));
 
 // The start button is the one action, and it is centred rather than pushed aside.
@@ -663,6 +674,94 @@ const recolour = await page.evaluate(async () => {
 ok('a palette change re-derives shades from the same per-event tint',
    recolour.n > 0 && recolour.tintsKept && recolour.changed && recolour.restored,
    `n=${recolour.n} tints kept=${recolour.tintsKept} changed=${recolour.changed} restored=${recolour.restored}`);
+
+
+// --- the input standard, usable from the page ---------------------------
+// The standard shipped as schemas and server endpoints, none of which work on
+// GitHub Pages. If the sandbox cannot demonstrate it, nobody meets it.
+const connect = await page.evaluate(async () => {
+  const q = (s) => document.querySelector(s);
+  q('#connect-explain').click();
+  await new Promise((r) => setTimeout(r, 60));
+  const rows = [...document.querySelectorAll('#connect-out table.trace tr')].slice(1)
+    .map((tr) => [...tr.children].map((td) => td.textContent));
+  return {
+    status: q('#connect-status').textContent,
+    state: q('#connect-status').dataset.state,
+    playable: !q('#connect-play').disabled,
+    rows,
+    summary: q('#sum-connect').textContent,
+  };
+});
+ok('the example mapping maps without a server', connect.state === 'good', connect.status);
+ok('and says how many events are ready', /3 events ready/.test(connect.status), connect.status);
+ok('the play button becomes usable', connect.playable);
+ok('it shows the working, field by field',
+   connect.rows.some((r) => r[0] === 'magnitude' && r[2] === '812'),
+   JSON.stringify(connect.rows.find((r) => r[0] === 'magnitude')));
+ok('a conditional expression is shown with its result',
+   connect.rows.some((r) => r[0] === 'category' && r[2] === '"alert"'),
+   JSON.stringify(connect.rows.find((r) => r[0] === 'category')));
+ok('the panel header states its own state', /ready/.test(connect.summary), connect.summary);
+
+// A bad mapping must say what is wrong, not fail silently.
+const connectBad = await page.evaluate(async () => {
+  const q = (s) => document.querySelector(s);
+  const keep = q('#connect-map').value;
+  q('#connect-map').value = '{"map": {"magnitude": "$.duration_ms +"}}';
+  q('#connect-explain').click();
+  await new Promise((r) => setTimeout(r, 60));
+  const broken = { status: q('#connect-status').textContent, state: q('#connect-status').dataset.state, playable: !q('#connect-play').disabled };
+  q('#connect-map').value = '{"map": {"magnitude": "process.env.SECRET"}}';
+  q('#connect-explain').click();
+  await new Promise((r) => setTimeout(r, 60));
+  const hostile = { status: q('#connect-status').textContent, state: q('#connect-status').dataset.state };
+  q('#connect-json').value = 'not json at all';
+  q('#connect-explain').click();
+  await new Promise((r) => setTimeout(r, 60));
+  const badJson = { status: q('#connect-status').textContent, state: q('#connect-status').dataset.state };
+  q('#connect-map').value = keep;
+  return { broken, hostile, badJson };
+});
+ok('a broken expression names its field', connectBad.broken.state === 'bad' && /magnitude/.test(connectBad.broken.status), connectBad.broken.status);
+ok('and nothing can be played from it', connectBad.broken.playable === false);
+ok('a hostile expression is refused in the page too',
+   connectBad.hostile.state === 'bad' && /process/.test(connectBad.hostile.status), connectBad.hostile.status);
+ok('invalid JSON is reported as such', connectBad.badJson.state === 'bad' && /JSON/.test(connectBad.badJson.status), connectBad.badJson.status);
+
+// Guessing a mapping for a payload nobody has seen.
+const guessed = await page.evaluate(async () => {
+  const q = (s) => document.querySelector(s);
+  q('#connect-json').value = JSON.stringify({
+    results: [
+      { uuid: 'z1', title: 'A thing happened', bytes: 4096, created_at: '2026-09-06T10:00:00Z', link: 'https://e.example/1' },
+      { uuid: 'z2', title: 'Another', bytes: 128, created_at: '2026-09-06T10:00:05Z', link: 'https://e.example/2' },
+    ],
+  });
+  q('#connect-guess').click();
+  await new Promise((r) => setTimeout(r, 80));
+  return {
+    items: q('#connect-items').value,
+    map: JSON.parse(q('#connect-map').value).map,
+    status: q('#connect-status').textContent,
+    state: q('#connect-status').dataset.state,
+  };
+});
+ok('it finds where the records are', guessed.items === '$.results', guessed.items);
+ok('it picks a numeric field for magnitude', guessed.map.magnitude === '$.bytes', guessed.map.magnitude);
+ok('and recognises an identity, a label and a time',
+   /uuid/.test(guessed.map.id || '') && guessed.map.label === '$.title' && /created_at/.test(guessed.map.ts || ''),
+   JSON.stringify(guessed.map));
+ok('the guess works on the first try', guessed.state === 'good', guessed.status);
+
+// Playing them reaches the engine.
+const played = await page.evaluate(async () => {
+  const before = window.son.stats.received;
+  document.querySelector('#connect-play').click();
+  await new Promise((r) => setTimeout(r, 900));
+  return window.son.stats.received - before;
+});
+ok('playing the mapped events reaches the engine', played >= 2, `${played} received`);
 
 // --- voice stealing under real load -------------------------------------
 const flood = await page.evaluate(async () => {

@@ -16,6 +16,14 @@ const samples = {
   'git-commit': { stats: { total: 143 }, additions: 120, deletions: 23, author: { email: 'a@b.c', name: 'A' }, message: 'Fix the thing\n\nlonger body', url: 'https://git/c/1', timestamp: 1757152800 },
   'usgs-quake': { id: 'ci41542184', properties: { mag: 5.8, place: '6 km NNW of Cabazon, CA', time: 1788719342690, url: 'https://earthquake.usgs.gov/earthquakes/eventpage/ci41542184' } },
   'x-search': { id: '1', text: 'Pentagon pizza index spiking\nsecond line', lang: 'en', created_at: '2026-09-06T23:10:00Z', public_metrics: { retweet_count: 240, like_count: 900, reply_count: 30 } },
+  // The shapes each live API actually returns, taken from a real response.
+  'blockchain-tx': { op: 'utx', x: { hash: '0ac3825bfda1f9b00897742beaa7', out: [{ value: 574413 }, { value: 12000 }] } },
+  'coinbase-match': { type: 'match', trade_id: 1089578614, side: 'buy', size: '0.00016969', price: '79875.01', product_id: 'BTC-USD', time: '2026-09-06T23:10:00Z' },
+  'bluesky-post': { kind: 'commit', did: 'did:plc:abc', time_us: 1788719342690000, commit: { operation: 'create', rkey: '3l7', record: { text: 'a post about something' } } },
+  'wikimedia-change': { title: 'Q3038619', namespace: 0, bot: false, wiki: 'wikidatawiki', timestamp: 1788719342, length: { old: 4100, new: 4222 }, meta: { uri: 'https://www.wikidata.org/wiki/Q3038619', id: 'e1' } },
+  'github-event': { id: '20275266898', type: 'PushEvent', repo: { name: 'someone/repo' }, created_at: '2026-09-06T23:10:00Z', payload: { commits: [{}, {}] } },
+  'nws-alert': { id: 'urn:oid:2.49.0.1.840.0.5ba91', properties: { id: 'urn:oid:2.49.0.1.840.0.5ba91', event: 'Special Weather Statement', severity: 'Moderate', areaDesc: 'Grundy; Marion', sent: '2026-09-06T23:00:00Z', '@id': 'https://api.weather.gov/alerts/x' } },
+  'hn-story': { id: 49590611, type: 'story', title: 'It took a year to ship WebAssembly', score: 100, descendants: 40, time: 1788719342, url: 'https://example.com/post' },
 };
 
 for (const file of fs.readdirSync(DIR)) {

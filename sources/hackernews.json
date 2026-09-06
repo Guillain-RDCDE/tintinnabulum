@@ -1,0 +1,9 @@
+{
+  "source": "tintinnabulum.source/1",
+  "name": "hackernews",
+  "description": "Front-page stories. A two-stage source: the list endpoint returns identities, and each is followed to its record.",
+  "enabled": false,
+  "fetch": { "url": "https://hacker-news.firebaseio.com/v0/topstories.json", "interval": 90000, "dedupeSize": 3000 },
+  "expand": { "url": "https://hacker-news.firebaseio.com/v0/item/${item}.json", "limit": 60, "concurrency": 6 },
+  "profile": "hn-story"
+}

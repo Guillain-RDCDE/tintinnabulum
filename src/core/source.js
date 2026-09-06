@@ -30,6 +30,7 @@ import { compile, check, ExprError } from './expr.js';
 export const SOURCE_VERSION = 'tintinnabulum.source/1';
 
 export const DEFAULTS = {
+  reconnect: 2000,
   interval: 60000,
   timeout: 15000,
   method: 'GET',
@@ -88,7 +89,55 @@ export function secretsUsed(doc) {
     }
   };
   walk(doc && doc.fetch);
+  walk(doc && doc.stream);
   return [...found];
+}
+
+/** A live connection rather than a poll: `stream` instead of `fetch`. */
+function validateStream(s, problems) {
+  if (typeof s.url !== 'string' || !s.url) {
+    problems.push('"stream.url" is required');
+  } else {
+    let u = null;
+    try {
+      u = new URL(s.url.replace(ENV_REF, 'x'));
+    } catch (e) {
+      problems.push(`"stream.url" is not a URL: ${s.url}`);
+    }
+    if (u) {
+      const local = u.hostname === 'localhost' || u.hostname === '127.0.0.1';
+      const secure = u.protocol === 'wss:' || u.protocol === 'https:';
+      if (!secure && !local) problems.push('"stream.url" must be wss: or https:, except against localhost');
+      const proto = s.protocol || (u.protocol.startsWith('ws') ? 'websocket' : 'sse');
+      if (!['websocket', 'sse'].includes(proto)) {
+        problems.push('"stream.protocol" must be "websocket" or "sse"');
+      }
+      if (proto === 'websocket' && !u.protocol.startsWith('ws')) {
+        problems.push('a websocket stream needs a ws: or wss: url');
+      }
+      if (proto === 'sse' && !u.protocol.startsWith('http')) {
+        problems.push('an sse stream needs an http: or https: url');
+      }
+    }
+  }
+  if (s.subscribe != null) {
+    const list = Array.isArray(s.subscribe) ? s.subscribe : [s.subscribe];
+    if (list.some((m) => m == null || typeof m !== 'object')) {
+      problems.push('"stream.subscribe" must be a JSON message, or an array of them');
+    }
+  }
+  if (s.headers != null && (typeof s.headers !== 'object' || Array.isArray(s.headers))) {
+    problems.push('"stream.headers" must be an object');
+  }
+  for (const [k, [lo, hi]] of Object.entries({
+    reconnect: [250, 300000], dedupeSize: LIMITS.dedupeSize, maxPerSecond: [0, 10000],
+  })) {
+    if (s[k] == null) continue;
+    const n = Number(s[k]);
+    if (!Number.isFinite(n) || n < lo || n > hi) {
+      problems.push(`"stream.${k}" must be a number between ${lo} and ${hi}`);
+    }
+  }
 }
 
 export function validateSource(doc) {
@@ -103,9 +152,26 @@ export function validateSource(doc) {
     problems.push('"name" is required: letters, digits, dot, dash or underscore, up to 64');
   }
 
+  if (doc.fetch && doc.stream) {
+    problems.push('a source polls or it listens: give "fetch" or "stream", not both');
+  }
+  if (!doc.fetch && !doc.stream) {
+    problems.push('"fetch" (poll an endpoint) or "stream" (hold a connection open) is required');
+  }
+
+  if (doc.stream) {
+    if (typeof doc.stream !== 'object' || Array.isArray(doc.stream)) {
+      problems.push('"stream" must be an object with at least a url');
+    } else {
+      validateStream(doc.stream, problems);
+    }
+  }
+
   const f = doc.fetch;
-  if (!f || typeof f !== 'object' || Array.isArray(f)) {
-    problems.push('"fetch" is required and must be an object with at least a url');
+  if (f === undefined) {
+    // A stream carries the connection instead; nothing more to check here.
+  } else if (!f || typeof f !== 'object' || Array.isArray(f)) {
+    problems.push('"fetch" must be an object with at least a url');
   } else {
     if (typeof f.url !== 'string' || !f.url) problems.push('"fetch.url" is required');
     else if (f.url.length > LIMITS.urlLength) problems.push('"fetch.url" is too long');
@@ -140,6 +206,24 @@ export function validateSource(doc) {
       if (!Number.isFinite(n) || n < lo || n > hi) {
         problems.push(`"fetch.${k}" must be a number between ${lo} and ${hi}`);
       }
+    }
+  }
+
+  if (doc.expand != null) {
+    const x = doc.expand;
+    if (typeof x !== 'object' || Array.isArray(x)) {
+      problems.push('"expand" must be an object with a url');
+    } else {
+      if (typeof x.url !== 'string' || !x.url.includes('${item}')) {
+        problems.push('"expand.url" is required and must contain ${item}, the value taken from "items"');
+      }
+      if (x.limit != null && (!Number.isFinite(Number(x.limit)) || Number(x.limit) < 1 || Number(x.limit) > 500)) {
+        problems.push('"expand.limit" must be between 1 and 500');
+      }
+      if (x.concurrency != null && (!Number.isFinite(Number(x.concurrency)) || Number(x.concurrency) < 1 || Number(x.concurrency) > 16)) {
+        problems.push('"expand.concurrency" must be between 1 and 16');
+      }
+      if (doc.stream) problems.push('"expand" belongs to a polled source, not a stream');
     }
   }
 
@@ -178,7 +262,8 @@ export function compileSource(doc, resolveProfile, env = {}) {
   const profile = resolveProfile(doc.profile);
   if (!profile) throw new SourceError('invalid source', [`no profile named "${doc.profile}"`]);
 
-  const f = doc.fetch;
+  const streaming = Boolean(doc.stream);
+  const f = doc.stream || doc.fetch;
   const url = resolveSecrets(f.url, env);
   const headers = {};
   const missing = [...url.missing];
@@ -199,6 +284,18 @@ export function compileSource(doc, resolveProfile, env = {}) {
     // parameter. The unresolved one is what a listing shows.
     url: f.url,
     resolvedUrl: url.out,
+    streaming,
+    protocol: streaming
+      ? f.protocol || (f.url.startsWith('ws') ? 'websocket' : 'sse')
+      : null,
+    // Sent once the socket opens. Several feeds say nothing until asked.
+    subscribe: streaming && f.subscribe
+      ? (Array.isArray(f.subscribe) ? f.subscribe : [f.subscribe])
+      : [],
+    reconnect: Number(f.reconnect) || DEFAULTS.reconnect,
+    // A firehose can outrun both the ears and the screen, so a stream may
+    // declare its own ceiling. 0 means every message.
+    maxPerSecond: Number(f.maxPerSecond) || 0,
     method: String(f.method || DEFAULTS.method).toUpperCase(),
     body: f.body ?? null,
     headers,
@@ -206,6 +303,17 @@ export function compileSource(doc, resolveProfile, env = {}) {
     timeout: Number(f.timeout) || DEFAULTS.timeout,
     dedupeSize: f.dedupeSize == null ? DEFAULTS.dedupeSize : Number(f.dedupeSize),
     spread: doc.spread == null ? DEFAULTS.spread : Number(doc.spread),
+    // A list endpoint that returns identities, and a detail endpoint that turns
+    // one identity into a record, is one of the commonest shapes on the web --
+    // Hacker News, Reddit, half of REST. Without this the standard could
+    // describe neither, and a connector author fell straight back to code.
+    expand: doc.expand
+      ? {
+          url: resolveSecrets(doc.expand.url, env).out,
+          limit: Number(doc.expand.limit) || 60,
+          concurrency: Number(doc.expand.concurrency) || 6,
+        }
+      : null,
     missingSecrets: [...new Set(missing)],
     secrets: secretsUsed(doc),
 
@@ -227,7 +335,18 @@ export function compileSource(doc, resolveProfile, env = {}) {
       }
       if (list == null) return { events: [], problems: ['"items" selected nothing'] };
       if (!Array.isArray(list)) list = [list];
+      return this.mapAll(list);
+    },
 
+    /** Select the identities `expand` should follow, before any are fetched. */
+    select(body) {
+      let list = items ? items(body) : body;
+      if (list == null) return [];
+      return Array.isArray(list) ? list : [list];
+    },
+
+    /** Run the profile over records that are already in hand. */
+    mapAll(list) {
       const events = [];
       const problems = [];
       for (const item of list) {

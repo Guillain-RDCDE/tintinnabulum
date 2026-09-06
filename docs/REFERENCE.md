@@ -20,7 +20,7 @@ Open the sandbox and change one thing at a time.
 | **Record** | Captures what you are hearing to an audio file. |
 | **Untick "Large events sound low"** | Inverts the mapping. Large edits turn shrill. Worse, and instructive. |
 
-Everything lives on one page, in five sections you can fold away. Each says
+Everything lives on one page, in six sections you can fold away. Each says
 what it is set to. Each keeps the rest behind **Advanced**. No setting exists
 twice.
 
@@ -441,11 +441,13 @@ Everything public is re-exported from [`src/index.js`](../src/index.js), so the
 files below can be split or renamed without breaking a caller.
 
 ```
-spec/                   the published input standard: two JSON Schemas and a page
+spec/                   the published input standard: three JSON Schemas and a page
 profiles/               shipped mapping profiles, one JSON document each
+sources/                shipped source descriptors: where live data comes from
 src/core/               event contract, adaptive mapper, voice allocator, Sonifier facade
   expr.js               the mapping expression language: closed, bounded, total
   profile.js            compiling and applying a mapping profile
+  source.js             descriptors: transport, extraction, secrets
 src/audio/
   engine.js             AudioContext, unlock, the iOS synchronous resume
   instrument.js         the note-playing contract
@@ -467,13 +469,16 @@ src/sources/
   transports.js         WebSocket, SSE, poll, manual, random, ingest
   feeds.js              Bitcoin, Coinbase, earthquakes, Bluesky, GitHub, NOAA, HN
   wikimedia.js          Wikipedia and its editions
-server/                 zero-dependency ingest and static server
+server/
+  ingest.mjs            zero-dependency ingest, fan-out and static server
+  runner.mjs            drives descriptors: fetch or listen, de-duplicate, pace
 sounds/                 sampled celesta, clavichord and string swells
 tools/
   render.mjs            drive the real visualiser headless, out to PNG
   make-social-preview.mjs  regenerate the card in .github/, from the engine
 demo/
   demo.js               the sandbox page
+  connect.js            the "Your data" panel: the standard, without a server
   dom.js                picker, canvas sizing and caption helpers
   store.js              guarded local storage
   feed-catalog.js       what the sandbox can listen to, as data

@@ -1,0 +1,29 @@
+{
+  "profile": "tintinnabulum.mapping/1",
+  "name": "github-event",
+  "description": "Public GitHub events. Pushes carry their commit count; everything else is one.",
+  "tables": {
+    "kind": {
+      "PushEvent": "user",
+      "PullRequestEvent": "anon",
+      "ReleaseEvent": "alert",
+      "WatchEvent": "bot",
+      "IssuesEvent": "anon",
+      "CreateEvent": "user"
+    }
+  },
+  "where": "$.id != null",
+  "map": {
+    "magnitude": "max(len($.payload.commits), 1) * 10",
+    "polarity": "$.type == 'DeleteEvent' ? -1 : 1",
+    "id": "$.id",
+    "category": "lookup('kind', $.type, 'user')",
+    "accent": "$.type == 'ReleaseEvent'",
+    "label": "replace($.type, 'Event', '') + ' ' + coalesce($.repo.name, '')",
+    "url": "$.repo.name != null ? 'https://github.com/' + $.repo.name : ''",
+    "ts": "epoch($.created_at)",
+    "source": {
+      "const": "github"
+    }
+  }
+}

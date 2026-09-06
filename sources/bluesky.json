@@ -1,0 +1,14 @@
+{
+  "source": "tintinnabulum.source/1",
+  "name": "bluesky",
+  "description": "The public Bluesky post firehose. Around two thousand a minute, so it declares its own ceiling.",
+  "enabled": false,
+  "stream": {
+    "url": "wss://jetstream2.us-east.bsky.network/subscribe?wantedCollections=app.bsky.feed.post",
+    "protocol": "websocket",
+    "maxPerSecond": 12,
+    "dedupeSize": 0
+  },
+  "key": "$.did + '/' + $.commit.rkey",
+  "profile": "bluesky-post"
+}

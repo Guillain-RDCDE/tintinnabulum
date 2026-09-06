@@ -1,0 +1,14 @@
+{
+  "source": "tintinnabulum.source/1",
+  "name": "coinbase",
+  "description": "BTC-USD trades as they execute. The one feed where direction means something on its own.",
+  "enabled": false,
+  "stream": {
+    "url": "wss://ws-feed.exchange.coinbase.com",
+    "protocol": "websocket",
+    "subscribe": { "type": "subscribe", "product_ids": ["BTC-USD"], "channels": ["matches"] },
+    "dedupeSize": 2000
+  },
+  "key": "str(coalesce($.trade_id, $.sequence))",
+  "profile": "coinbase-match"
+}

@@ -91,6 +91,51 @@ const wrong = compileSource({ ...readSource('earthquakes'), items: '$.nope' }, (
 ok('a wrong items path is explained', wrong.extract(usgsBody).problems.length > 0,
    wrong.extract(usgsBody).problems.join('; '));
 
+// --- every shipped feed must be expressible as a document ----------------
+// This is the only honest test of a standard: if it cannot describe our own
+// sources, it is not worth offering for anyone else's. Eight feeds shipped as
+// hand-written JavaScript in src/sources/; all eight are descriptors now.
+{
+  const want = ['bitcoin', 'bluesky', 'coinbase', 'earthquakes', 'github', 'hackernews', 'weather', 'wikipedia'];
+  const have = fs.readdirSync(SOURCES).map((f) => f.slice(0, -5));
+  const absent = want.filter((n) => !have.includes(n));
+  ok('every built-in feed exists as a descriptor', absent.length === 0, absent.join(', ') || `${want.length} feeds`);
+
+  const byTransport = { poll: 0, websocket: 0, sse: 0, expand: 0 };
+  for (const n of want) {
+    const d = readSource(n);
+    if (d.stream) byTransport[d.stream.protocol || (d.stream.url.startsWith('ws') ? 'websocket' : 'sse')]++;
+    else byTransport.poll++;
+    if (d.expand) byTransport.expand++;
+  }
+  ok('the standard covers every transport those feeds need',
+     byTransport.websocket >= 3 && byTransport.sse >= 1 && byTransport.poll >= 4 && byTransport.expand >= 1,
+     JSON.stringify(byTransport));
+}
+
+// A source polls or it listens, never both, and a stream cannot expand.
+ok('fetch and stream together are refused',
+   !validateSource({ name: 'x', fetch: { url: 'https://a.example/' }, stream: { url: 'wss://a.example/' }, profile: 'p' }).ok);
+ok('neither one is refused', !validateSource({ name: 'x', profile: 'p' }).ok);
+ok('a websocket url with sse protocol is refused',
+   !validateSource({ name: 'x', stream: { url: 'wss://a.example/', protocol: 'sse' }, profile: 'p' }).ok);
+ok('plain ws is refused off localhost',
+   !validateSource({ name: 'x', stream: { url: 'ws://evil.example/' }, profile: 'p' }).ok);
+ok('expand without ${item} is refused',
+   !validateSource({ name: 'x', fetch: { url: 'https://a.example/' }, expand: { url: 'https://a.example/i' }, profile: 'p' }).ok);
+ok('expand on a stream is refused',
+   !validateSource({ name: 'x', stream: { url: 'wss://a.example/' }, expand: { url: 'https://a/${item}' }, profile: 'p' }).ok);
+
+// The aggregate functions the real feeds needed and paths could not give.
+{
+  const { compile } = await import('../src/core/expr.js');
+  const tx = { out: [{ value: 100 }, { value: 250 }, { nope: 1 }] };
+  ok('sumof adds one field across a list', compile('sumof($.out, \'value\')')(tx) === 350);
+  ok('sumof of nothing is null, not zero', compile('sumof($.missing, \'value\')')(tx) === null);
+  ok('maxof takes the largest', compile('maxof($.out, \'value\')')(tx) === 250);
+  ok('sumof cannot reach a prototype', compile('sumof($.out, \'__proto__\')')(tx) === null);
+}
+
 // --- the runner, against a local endpoint --------------------------------
 let served = 0;
 const fake = http.createServer((req, res) => {
@@ -141,6 +186,75 @@ ok('a dead endpoint is recorded, not thrown', deadState.failures === 1 && deadSt
 ok('and the next attempt backs off', deadState.nextDelay > dead.interval, `${deadState.nextDelay}ms`);
 
 fake.close();
+
+
+// --- streams and two-stage sources, against local servers ----------------
+{
+  const { WebSocketServer } = await import('node:http').then(() => ({ WebSocketServer: null })).catch(() => ({ WebSocketServer: null }));
+  // No websocket server without a dependency, so SSE stands in for the live
+  // path: same _consume, same dedupe, same reconnect.
+  let sseHits = 0;
+  const sse = http.createServer((req, res) => {
+    sseHits++;
+    res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+    const frame = (o) => 'data: ' + JSON.stringify(o) + '\n\n';
+    res.write(frame({ kind: 'tick', n: 7, ref: 'a' }));
+    res.write(frame({ kind: 'tick', n: 9, ref: 'b' }));
+    res.write('data: not json\n\n'); // a heartbeat is not an error
+    res.write(frame({ kind: 'skip', n: 1, ref: 'c' }));
+  });
+  await new Promise((r) => sse.listen(8904, r));
+
+  const streamSrc = compileSource({
+    name: 'sse-test',
+    stream: { url: 'http://localhost:8904/s', protocol: 'sse', dedupeSize: 100 },
+    key: '$.ref',
+    profile: { where: "$.kind == 'tick'", map: { magnitude: '$.n', id: '$.ref' } },
+  }, (p) => compileProfile(p), {});
+  ok('an sse descriptor compiles as a stream', streamSrc.streaming && streamSrc.protocol === 'sse');
+
+  const probe = await runner.test(streamSrc, { seconds: 4 });
+  ok('testing a stream reports what arrived', probe.messages >= 3, `messages=${probe.messages}`);
+  ok('and maps them without emitting', probe.found >= 2 && probe.first, `found=${probe.found}`);
+  ok('a non-JSON frame is ignored rather than fatal', probe.connected !== false);
+  ok('where still drops what it should', probe.found === 2, `found=${probe.found}`);
+  sse.close();
+}
+
+{
+  // Two-stage: a list of identities, then one request per identity.
+  let listHits = 0, itemHits = 0;
+  const api = http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    if (req.url === '/list') { listHits++; return res.end(JSON.stringify([11, 12, 13])); }
+    const id = Number(req.url.split('/').pop().replace('.json', ''));
+    itemHits++;
+    res.end(JSON.stringify({ id, title: 'story ' + id, score: id * 10 }));
+  });
+  await new Promise((r) => api.listen(8905, r));
+
+  const two = compileSource({
+    name: 'two-stage',
+    fetch: { url: 'http://localhost:8905/list', interval: 1000 },
+    expand: { url: 'http://localhost:8905/item/${item}.json', limit: 10, concurrency: 2 },
+    profile: { map: { magnitude: '$.score', id: 'str($.id)', label: '$.title' } },
+  }, (p) => compileProfile(p), {});
+  ok('a two-stage descriptor compiles', two.expand !== null && two.expand.limit === 10);
+
+  const t = await runner.test(two);
+  ok('it follows the identities to their records', t.found === 3, `found=${t.found}, ${t.problems.join('; ')}`);
+  ok('and maps the fetched record, not the identity',
+     t.first && t.first.event.label === 'story 11', JSON.stringify(t.first && t.first.event.label));
+  ok('one request per identity, plus the list', itemHits >= 3 && listHits >= 1, `list=${listHits} items=${itemHits}`);
+
+  const st = runner.start(two);
+  await new Promise((r) => setTimeout(r, 500));
+  const firstRun = itemHits;
+  await runner.tick(st);
+  ok('a second poll does not refetch identities already seen', itemHits === firstRun, `${itemHits - firstRun} refetched`);
+  runner.stop('two-stage');
+  api.close();
+}
 
 // --- over HTTP -----------------------------------------------------------
 const PORT = 8903;

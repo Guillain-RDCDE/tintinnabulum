@@ -287,6 +287,47 @@ export const FUNCTIONS = {
     return Number.isFinite(t) ? t : null;
   },
   now: () => Date.now(),
+
+  /**
+   * sumof($.outputs, 'value') -- add one numeric field across a list.
+   *
+   * Aggregating over a list is the one thing real payloads need that paths
+   * cannot express: a Bitcoin transaction's value is the sum of its outputs,
+   * and without this it cannot be described at all. A named field rather than
+   * an expression keeps the language free of lambdas, which is what keeps it
+   * small enough to reason about.
+   */
+  sumof: (arr, field) => {
+    if (!Array.isArray(arr)) return null;
+    let total = 0;
+    let seen = 0;
+    const key = field == null ? null : String(field);
+    if (key !== null && FORBIDDEN.has(key)) return null;
+    for (const item of arr) {
+      const v = key === null ? item
+        : item && typeof item === 'object' && Object.prototype.hasOwnProperty.call(item, key)
+          ? item[key] : null;
+      const n = num(v);
+      if (n != null) { total += n; seen++; }
+    }
+    return seen ? total : null;
+  },
+
+  /** The largest value of one field across a list, or null if there is none. */
+  maxof: (arr, field) => {
+    if (!Array.isArray(arr)) return null;
+    let best = null;
+    const key = field == null ? null : String(field);
+    if (key !== null && FORBIDDEN.has(key)) return null;
+    for (const item of arr) {
+      const v = key === null ? item
+        : item && typeof item === 'object' && Object.prototype.hasOwnProperty.call(item, key)
+          ? item[key] : null;
+      const n = num(v);
+      if (n != null && (best === null || n > best)) best = n;
+    }
+    return best;
+  },
 };
 
 /**

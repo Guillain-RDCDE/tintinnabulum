@@ -1,0 +1,20 @@
+{
+  "profile": "tintinnabulum.mapping/1",
+  "name": "nws-alert",
+  "description": "Active US severe-weather alerts. Severity sets the pitch, and the moment of issue is kept so a backlog replays with the shape of the day.",
+  "tables": {
+    "severity": { "Extreme": 100, "Severe": 70, "Moderate": 40, "Minor": 20, "Unknown": 5 }
+  },
+  "where": "$.properties.event != null",
+  "map": {
+    "magnitude": "lookup('severity', $.properties.severity, 5)",
+    "polarity": { "const": 1 },
+    "id": "coalesce($.properties.id, $.id)",
+    "category": "lookup('severity', $.properties.severity, 5) >= 60 ? 'alert' : $.properties.severity == 'Moderate' ? 'anon' : 'user'",
+    "accent": "$.properties.severity == 'Extreme'",
+    "label": "$.properties.event + ' — ' + at(split(coalesce($.properties.areaDesc, ''), ';'), 0)",
+    "url": "coalesce($.properties['@id'], '')",
+    "ts": "epoch($.properties.sent)",
+    "source": { "const": "nws" }
+  }
+}

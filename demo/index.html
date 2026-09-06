@@ -158,6 +158,24 @@
     border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); min-height: 40px; }
   select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
   input[type=range] { width: 100%; accent-color: var(--accent); }
+  /* Your data: a JSON pane, a mapping pane, and what the engine made of them. */
+  textarea { width: 100%; padding: .55rem .65rem; color: var(--fg); background: var(--surface);
+    border: 1px solid var(--line-strong); border-radius: 8px; resize: vertical;
+    font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  #sec-connect .row { display: flex; flex-wrap: wrap; gap: .5rem; margin: .7rem 0 .2rem; }
+  #sec-connect .row button { font: inherit; padding: .5rem .9rem; min-height: 40px; cursor: pointer;
+    color: var(--fg); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 8px; }
+  #sec-connect .row button:disabled { opacity: .45; cursor: default; }
+  #connect-status[data-state="bad"] { color: #ff8f6b; }
+  #connect-status[data-state="good"] { color: #6bd6a6; }
+  table.trace { width: 100%; border-collapse: collapse; font-size: .78rem; margin-top: .5rem;
+    display: block; overflow-x: auto; }
+  table.trace th, table.trace td { text-align: left; padding: .3rem .5rem; border-bottom: 1px solid var(--line);
+    white-space: nowrap; }
+  table.trace th { color: var(--muted); font-weight: 600; }
+  table.trace td:nth-child(2) { font-family: ui-monospace, Menlo, Consolas, monospace; color: var(--muted); }
+  table.trace tr[data-state="bad"] td { color: #ff8f6b; }
   .check { display: flex; align-items: center; gap: .55rem; font-size: .875rem; color: var(--fg);
            min-height: 40px; cursor: pointer; }
   .check input { width: 18px; height: 18px; accent-color: var(--accent); }
@@ -316,6 +334,37 @@
           </div>
         </div>
       </details>
+    </div>
+  </details>
+
+  <details class="panel" id="sec-connect">
+    <summary><span class="t">Your data</span><span class="v" id="sum-connect"></span></summary>
+    <div class="body">
+      <p class="note">Paste anything. Describe how it becomes sound. Hear it. Nothing is
+        uploaded and nothing is installed — this runs entirely in this page.</p>
+
+      <p class="sub-label">A sample of your JSON</p>
+      <textarea id="connect-json" rows="7" spellcheck="false"></textarea>
+
+      <label class="field"><span>Where the records are</span>
+        <input type="text" id="connect-items" spellcheck="false" placeholder="$.data — leave empty if the payload is already the list"></label>
+
+      <p class="sub-label">The mapping</p>
+      <textarea id="connect-map" rows="12" spellcheck="false"></textarea>
+
+      <div class="row">
+        <button type="button" id="connect-guess">Guess a mapping</button>
+        <button type="button" id="connect-explain">What did it understand?</button>
+        <button type="button" id="connect-play" disabled>Play these</button>
+      </div>
+      <p class="note" id="connect-status"></p>
+      <div id="connect-out"></div>
+
+      <p class="note">This is the same mapping document the engine reads anywhere else.
+        Save it as <code>profiles/&lt;name&gt;.json</code>, add a
+        <code>sources/&lt;name&gt;.json</code> saying where to fetch from, and the
+        connector is finished — no code at any point.
+        <a href="../spec/README.md">The input standard</a>.</p>
     </div>
   </details>
 

@@ -1,0 +1,17 @@
+{
+  "profile": "tintinnabulum.mapping/1",
+  "name": "hn-story",
+  "description": "Hacker News items. Score and comments set the pitch: a new story always scores one, so the front page is used instead, and it spans three orders of magnitude.",
+  "where": "$.title != null and $.type == 'story'",
+  "map": {
+    "magnitude": "coalesce($.score, 1) + coalesce($.descendants, 0) * 2",
+    "polarity": { "const": 1 },
+    "id": "str($.id)",
+    "category": "coalesce($.score, 0) >= 200 ? 'alert' : coalesce($.descendants, 0) > coalesce($.score, 0) ? 'anon' : 'user'",
+    "accent": "coalesce($.score, 0) >= 300",
+    "label": "$.title",
+    "url": "coalesce($.url, 'https://news.ycombinator.com/item?id=' + str($.id))",
+    "ts": "epoch($.time)",
+    "source": { "const": "hackernews" }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "source": "tintinnabulum.source/1",
+  "name": "github",
+  "description": "Public GitHub events: pushes, pull requests, releases and stars, polled once a minute and spread out.",
+  "enabled": false,
+  "fetch": { "url": "https://api.github.com/events?per_page=30", "interval": 75000, "dedupeSize": 500 },
+  "key": "$.id",
+  "profile": "github-event"
+}

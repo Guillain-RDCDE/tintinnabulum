@@ -1,0 +1,16 @@
+{
+  "profile": "tintinnabulum.mapping/1",
+  "name": "blockchain-tx",
+  "description": "Unconfirmed Bitcoin transactions from blockchain.info's socket. Value is the sum of the outputs, in satoshis.",
+  "where": "$.op == 'utx' and sumof($.x.out, 'value') != null",
+  "map": {
+    "magnitude": "sumof($.x.out, 'value')",
+    "polarity": { "const": 1 },
+    "id": "$.x.hash",
+    "category": "sumof($.x.out, 'value') >= 5000000000 ? 'alert' : 'user'",
+    "accent": "sumof($.x.out, 'value') >= 5000000000",
+    "label": "str(round(sumof($.x.out, 'value') / 1000000)  / 100) + ' BTC'",
+    "url": "'https://www.blockchain.com/btc/tx/' + $.x.hash",
+    "source": { "const": "bitcoin" }
+  }
+}

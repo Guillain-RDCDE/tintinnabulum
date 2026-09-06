@@ -1,0 +1,15 @@
+{
+  "source": "tintinnabulum.source/1",
+  "name": "weather",
+  "description": "Active severe-weather alerts from the US National Weather Service.",
+  "enabled": false,
+  "fetch": {
+    "url": "https://api.weather.gov/alerts/active",
+    "headers": { "Accept": "application/geo+json" },
+    "interval": 120000,
+    "dedupeSize": 3000
+  },
+  "items": "$.features",
+  "key": "coalesce($.properties.id, $.id)",
+  "profile": "nws-alert"
+}

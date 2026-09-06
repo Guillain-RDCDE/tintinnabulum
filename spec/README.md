@@ -131,6 +131,47 @@ A descriptor closes it. Save it as `sources/<name>.json`:
 identity, so a poll returning the same things again does not replay them.
 `profile` is a name from `profiles/`, or a whole mapping document inline.
 
+### Listening instead of polling
+
+Most of what is worth hearing does not wait to be asked. Replace `fetch` with
+`stream`:
+
+```json
+"stream": {
+  "url": "wss://ws.blockchain.info/inv",
+  "protocol": "websocket",
+  "subscribe": { "op": "unconfirmed_sub" },
+  "maxPerSecond": 12
+}
+```
+
+`wss:` is a WebSocket, `https:` is Server-Sent Events; the protocol is inferred
+from the scheme unless you say otherwise. `subscribe` is sent once the socket
+opens, because many feeds say nothing until asked. `maxPerSecond` is the
+descriptor's own ceiling — a firehose outruns both the ears and the screen, and
+dropping at the source keeps the cost off the renderer entirely.
+
+Reconnection is automatic and backs off: a socket that has been up for a day
+will close, and a feed that silently stops is worse than one that never
+started.
+
+### Two-stage sources
+
+A list endpoint that returns identities, and a detail endpoint that turns one
+identity into a record, is one of the commonest shapes on the web. Add
+`expand`:
+
+```json
+"fetch":  { "url": "https://hacker-news.firebaseio.com/v0/topstories.json" },
+"expand": { "url": "https://hacker-news.firebaseio.com/v0/item/${item}.json",
+            "limit": 60, "concurrency": 6 }
+```
+
+Each value `items` selected is substituted into `expand.url` and fetched, and
+the record that comes back is what the profile maps. Requests go out a few at
+a time: a hundred at once is how a polite poll becomes an attack. Identities
+already followed are remembered, so a poll of an unchanged list costs nothing.
+
 Get it working before you listen to it:
 
 ```bash
@@ -170,10 +211,36 @@ dropped by key, and a failing endpoint backs off exponentially and obeys
 4. `POST /sources/<yours>/test` until `found` is the number you expect.
 5. Start it.
 
-Two are shipped to copy from. `sources/earthquakes.json` needs no key and works
-immediately. `sources/pizza-index.json` is the shape of a connector that needs
-a token — posts about late-night pizza deliveries near the Pentagon, on the
-folk theory that a crisis is catered before it is announced.
+### What ships, and why it is worth reading
+
+Every feed built into this project is a descriptor. All eight of them — they
+used to be three hundred lines of JavaScript inside `src/sources/`, and if the
+standard could not express them it would not be worth offering for anyone
+else's data:
+
+| | Transport | Shows |
+|---|---|---|
+| `bitcoin` | websocket | `subscribe`, and `sumof()` over a transaction's outputs |
+| `coinbase` | websocket | a polarity that means something: buys ring, sells pluck |
+| `bluesky` | websocket | `maxPerSecond`, on a feed running two thousand a minute |
+| `wikipedia` | sse | Server-Sent Events, and no de-duplication at all |
+| `earthquakes` | poll | the simplest one. Needs no key: copy this first |
+| `weather` | poll | `lookup()` against a table of severities |
+| `github` | poll | a table mapping event types to categories |
+| `hackernews` | poll + `expand` | two stages: a list of identities, then each record |
+
+`sources/pizza-index.json` is the shape of a connector that needs a token —
+posts about late-night pizza deliveries near the Pentagon, on the folk theory
+that a crisis is catered before it is announced.
+
+### Without a server at all
+
+The sandbox has a **Your data** panel. Paste a sample, describe the mapping,
+see what the engine understood field by field, and hear it — no install, no
+server, nothing uploaded. The expression language and the profile machinery are
+plain modules with no I/O, so all of that runs in the page. Only the fetching
+half needs a server, and that is the half a browser cannot do anyway: CORS,
+secrets, and a throttled background tab.
 
 ---
 

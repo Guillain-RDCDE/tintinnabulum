@@ -1,0 +1,16 @@
+{
+  "profile": "tintinnabulum.mapping/1",
+  "name": "wikimedia-change",
+  "description": "Wikimedia EventStreams recent changes. Bytes added or removed set the pitch; bots, anonymous editors and registered users are told apart.",
+  "where": "$.title != null and $.namespace == 0",
+  "map": {
+    "magnitude": "abs(coalesce($.length.new, 0) - coalesce($.length.old, 0))",
+    "polarity": "coalesce($.length.new, 0) >= coalesce($.length.old, 0) ? 1 : -1",
+    "id": "$.title",
+    "label": "$.title",
+    "url": "coalesce($.meta.uri, $.server_url + '/wiki/' + $.title)",
+    "category": "$.bot ? 'bot' : 'user'",
+    "ts": "epoch($.timestamp)",
+    "source": "$.wiki"
+  }
+}

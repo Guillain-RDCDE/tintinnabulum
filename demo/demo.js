@@ -22,6 +22,7 @@ import {
 import { $, createPicker, fitCanvas, caption } from './dom.js';
 import { store } from './store.js';
 import { createFeedCatalog } from './feed-catalog.js';
+import { setupConnect } from './connect.js';
 
 const storedPalette = store.pick('palette', PALETTES, DEFAULT_PALETTE_NAME);
 
@@ -478,6 +479,7 @@ const RESTRAINT_STEPS = [
 // Off by default: this changes what everyone hears, so it is offered rather
 // than imposed.
 let restraintWord = 'everything';
+let connectSummary = 'Paste JSON, hear it';
 
 function selectRestraint(ms, persist = true) {
   const v = Math.max(0, Math.min(1200, Math.round(ms)));
@@ -582,6 +584,7 @@ function updateSummaries() {
   $('#sum-look').textContent =
     `${SCENES[canvas.sceneName].label} · ${PALETTES[canvas.paletteName].label}` +
     (richnessWord === 'balanced' ? '' : ` · ${richnessWord} colour`);
+  $('#sum-connect').textContent = connectSummary;
   $('#sum-filter').textContent =
     (cats.length === 4 ? 'Everything' : cats.join(', ') || 'Nothing') +
     (minmag > 0 ? ` · above ${minmag}` : '');
@@ -631,6 +634,18 @@ $('#depth').checked = store.flag('depth', true);
 canvas.setDepth($('#depth').checked);
 selectBudget(store.number('budget', canvas.maxParticles, 100, 6000), false);
 selectRestraint(store.number('restraint', 0, 0, 1200), false);
+// Your data: the standard, usable without a server. Events are handed to the
+// engine one every 400ms rather than all at once, because three notes at the
+// same instant is a chord, not three events.
+const connect = setupConnect({
+  onState: (text) => { connectSummary = text; updateSummaries(); },
+  play: async (events) => {
+    await ensureAudio();
+    if (!startBtn.dataset.on || startBtn.dataset.on !== 'true') setStatus('your data');
+    events.forEach((ev, i) => setTimeout(() => son.emit(ev), i * 400));
+  },
+});
+
 $('#cats').addEventListener('change', updateSummaries);
 $('#minmag').addEventListener('input', updateSummaries);
 updateSummaries();

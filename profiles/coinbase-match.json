@@ -1,0 +1,15 @@
+{
+  "profile": "tintinnabulum.mapping/1",
+  "name": "coinbase-match",
+  "description": "Executed trades from Coinbase's matches channel. Buys ring, sells pluck.",
+  "where": "($.type == 'match' or $.type == 'last_match') and num($.size) != null and num($.price) != null",
+  "map": {
+    "magnitude": "num($.size) * num($.price)",
+    "polarity": "$.side == 'sell' ? -1 : 1",
+    "id": "str(coalesce($.trade_id, $.sequence))",
+    "category": "$.side == 'sell' ? 'anon' : 'user'",
+    "label": "$.side + ' ' + str($.size) + ' @ ' + str($.price)",
+    "ts": "epoch($.time)",
+    "source": "coalesce($.product_id, 'coinbase')"
+  }
+}

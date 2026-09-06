@@ -5,16 +5,23 @@
   "version": "tintinnabulum.source/1",
   "description": "Where live data comes from, how often to fetch it, and which mapping turns it into events. Together with a mapping profile this is a complete connector, as a document rather than as code.",
   "type": "object",
-  "required": ["name", "fetch", "profile"],
+  "required": [
+    "name",
+    "profile"
+  ],
   "additionalProperties": false,
   "properties": {
-    "source": { "const": "tintinnabulum.source/1" },
+    "source": {
+      "const": "tintinnabulum.source/1"
+    },
     "name": {
       "type": "string",
       "pattern": "^[A-Za-z0-9._-]{1,64}$",
       "description": "Identifies the source. Also its filename: sources/<name>.json."
     },
-    "description": { "type": "string" },
+    "description": {
+      "type": "string"
+    },
     "enabled": {
       "type": "boolean",
       "default": false,
@@ -22,7 +29,9 @@
     },
     "fetch": {
       "type": "object",
-      "required": ["url"],
+      "required": [
+        "url"
+      ],
       "additionalProperties": false,
       "properties": {
         "url": {
@@ -30,28 +39,63 @@
           "maxLength": 4096,
           "description": "Must be https, except against localhost. May contain ${env.NAME} references, which are resolved where the runner runs and never stored or returned."
         },
-        "method": { "enum": ["GET", "POST"], "default": "GET" },
+        "method": {
+          "enum": [
+            "GET",
+            "POST"
+          ],
+          "default": "GET"
+        },
         "headers": {
           "type": "object",
           "maxProperties": 24,
-          "additionalProperties": { "type": "string" },
+          "additionalProperties": {
+            "type": "string"
+          },
           "description": "Values may contain ${env.NAME}. This is where an API token belongs; never inline one."
         },
-        "body": { "description": "Sent as JSON when method is POST." },
-        "interval": { "type": "number", "minimum": 1000, "maximum": 86400000, "default": 60000, "description": "Milliseconds between polls. Respect the API's rate limit: this is the number that gets a key revoked." },
-        "timeout": { "type": "number", "minimum": 500, "maximum": 120000, "default": 15000 },
-        "dedupeSize": { "type": "number", "minimum": 0, "maximum": 100000, "default": 1000, "description": "How many recent keys to remember, so a poll that returns the same items again does not replay them." }
-      }
+        "body": {
+          "description": "Sent as JSON when method is POST."
+        },
+        "interval": {
+          "type": "number",
+          "minimum": 1000,
+          "maximum": 86400000,
+          "default": 60000,
+          "description": "Milliseconds between polls. Respect the API's rate limit: this is the number that gets a key revoked."
+        },
+        "timeout": {
+          "type": "number",
+          "minimum": 500,
+          "maximum": 120000,
+          "default": 15000
+        },
+        "dedupeSize": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000,
+          "default": 1000,
+          "description": "How many recent keys to remember, so a poll that returns the same items again does not replay them."
+        }
+      },
+      "description": "Poll an endpoint on an interval. Give this or \"stream\", never both."
     },
     "items": {
       "type": "string",
       "description": "An expression selecting the array of things in the response. Omit it when the response is already the array.",
-      "examples": ["$.data", "$.features", "$.hits.hits"]
+      "examples": [
+        "$.data",
+        "$.features",
+        "$.hits.hits"
+      ]
     },
     "key": {
       "type": "string",
       "description": "An expression giving each item a stable identity, used to recognise what has already been heard. Defaults to the event's id.",
-      "examples": ["$.id", "$.properties.id"]
+      "examples": [
+        "$.id",
+        "$.properties.id"
+      ]
     },
     "spread": {
       "type": "number",
@@ -62,7 +106,105 @@
     },
     "profile": {
       "description": "A profile name from profiles/, or a whole mapping document inline.",
-      "oneOf": [{ "type": "string" }, { "type": "object" }]
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object"
+        }
+      ]
+    },
+    "stream": {
+      "type": "object",
+      "required": [
+        "url"
+      ],
+      "additionalProperties": false,
+      "description": "Hold a connection open instead of polling. Give this or \"fetch\", never both.",
+      "properties": {
+        "url": {
+          "type": "string",
+          "maxLength": 4096,
+          "description": "wss: for a websocket, https: for Server-Sent Events. May contain ${env.NAME}."
+        },
+        "protocol": {
+          "enum": [
+            "websocket",
+            "sse"
+          ],
+          "description": "Inferred from the url scheme when omitted."
+        },
+        "subscribe": {
+          "description": "A JSON message, or several, sent once the socket opens. Many feeds say nothing until asked.",
+          "oneOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            }
+          ]
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Server-Sent Events only. May contain ${env.NAME}."
+        },
+        "reconnect": {
+          "type": "number",
+          "minimum": 250,
+          "maximum": 300000,
+          "default": 2000,
+          "description": "Milliseconds before the first reconnection attempt. The delay grows with consecutive failures."
+        },
+        "maxPerSecond": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10000,
+          "default": 0,
+          "description": "A firehose can outrun both the ears and the screen. 0 means every message."
+        },
+        "dedupeSize": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000,
+          "description": "0 disables it, which is right for a stream that never repeats itself."
+        }
+      }
+    },
+    "expand": {
+      "type": "object",
+      "required": [
+        "url"
+      ],
+      "additionalProperties": false,
+      "description": "A second stage, for a list endpoint that returns identities rather than records. Each value from \"items\" is substituted into this url and fetched, and the result is what the profile maps. Polled sources only.",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "Must contain ${item}, the value taken from \"items\"."
+        },
+        "limit": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 500,
+          "default": 60,
+          "description": "How many identities to follow per poll."
+        },
+        "concurrency": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 16,
+          "default": 6,
+          "description": "How many at a time. A hundred at once is how a polite poll becomes an attack."
+        }
+      }
     }
   }
 }
