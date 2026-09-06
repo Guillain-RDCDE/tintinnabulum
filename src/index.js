@@ -3,6 +3,16 @@ export { Sonifier } from './core/sonifier.js';
 export { normalize, unitPosition, rngFrom } from './core/event.js';
 export { Mapper, SCALES, KEYS } from './core/mapper.js';
 export { VoicePool } from './core/voices.js';
+export { compile as compileExpression, check as checkExpression, FUNCTIONS as EXPR_FUNCTIONS, ExprError } from './core/expr.js';
+export {
+  compileProfile,
+  validateProfile,
+  profileFromQuery,
+  ProfileError,
+  MAPPING_VERSION,
+  EVENT_VERSION,
+  TARGET_FIELDS,
+} from './core/profile.js';
 
 export { AudioEngine } from './audio/engine.js';
 export { AudioSink } from './audio/audio-sink.js';

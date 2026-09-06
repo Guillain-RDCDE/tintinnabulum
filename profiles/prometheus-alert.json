@@ -1,0 +1,16 @@
+{
+  "profile": "tintinnabulum.mapping/1",
+  "name": "prometheus-alert",
+  "description": "Alertmanager webhook payloads: one note per firing alert, pitched by severity.",
+  "where": "$.status == 'firing'",
+  "map": {
+    "magnitude": "lower($.labels.severity) == 'critical' ? 1000 : lower($.labels.severity) == 'warning' ? 100 : 10",
+    "id": "coalesce($.labels.alertname, 'alert') + '/' + coalesce($.labels.instance, '?')",
+    "category": "lower($.labels.severity) == 'critical' ? 'alert' : 'bot'",
+    "accent": "lower($.labels.severity) == 'critical'",
+    "label": "coalesce($.annotations.summary, $.labels.alertname)",
+    "url": "coalesce($.generatorURL, '')",
+    "ts": "epoch($.startsAt)",
+    "source": { "const": "prometheus" }
+  }
+}

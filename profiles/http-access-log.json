@@ -1,0 +1,15 @@
+{
+  "profile": "tintinnabulum.mapping/1",
+  "name": "http-access-log",
+  "description": "One line per HTTP request: latency as pitch, status as colour, 5xx as an accent.",
+  "where": "$.status != null",
+  "map": {
+    "magnitude": "coalesce($.duration_ms, $.latency_ms, $.took)",
+    "id": "$.method + ' ' + $.route",
+    "category": "$.status >= 500 ? 'alert' : $.status >= 400 ? 'anon' : 'user'",
+    "accent": "$.status >= 500",
+    "label": "$.method + ' ' + $.route + ' ' + str($.status)",
+    "ts": "epoch(coalesce($.time, $.timestamp, $.ts))",
+    "source": { "const": "http-access-log" }
+  }
+}

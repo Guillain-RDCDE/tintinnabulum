@@ -441,7 +441,11 @@ Everything public is re-exported from [`src/index.js`](../src/index.js), so the
 files below can be split or renamed without breaking a caller.
 
 ```
+spec/                   the published input standard: two JSON Schemas and a page
+profiles/               shipped mapping profiles, one JSON document each
 src/core/               event contract, adaptive mapper, voice allocator, Sonifier facade
+  expr.js               the mapping expression language: closed, bounded, total
+  profile.js            compiling and applying a mapping profile
 src/audio/
   engine.js             AudioContext, unlock, the iOS synchronous resume
   instrument.js         the note-playing contract

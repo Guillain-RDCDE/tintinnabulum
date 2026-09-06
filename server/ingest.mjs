@@ -8,9 +8,12 @@
 // its own, and SSE needs nothing beyond node:http.
 //
 //   POST /emit           {"magnitude": 1200, "id": "build-42"}      (or an array)
-//   POST /emit?magnitude=$.duration_ms&id=$.service                 (map any JSON)
+//   POST /emit?profile=http-access-log                              (a saved mapping)
+//   POST /emit?magnitude=$.duration_ms&id=$.service                 (the shorthand)
 //   GET  /emit?magnitude=42&id=quick-test                           (curl-friendly)
+//   POST /explain[?profile=…]                                       (what did it understand?)
 //   GET  /events[?replay=20]                                        (SSE fan-out)
+//   GET  /profiles  ·  GET /schema  ·  GET /schema/mapping
 //   GET  /stats
 //
 // It also serves static files, so the demo page and the sample banks come from
@@ -20,6 +23,14 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  compileProfile,
+  validateProfile,
+  profileFromQuery,
+  ProfileError,
+  MAPPING_VERSION,
+  EVENT_VERSION,
+} from '../src/core/profile.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const argv = process.argv.slice(2);
@@ -86,37 +97,109 @@ function readBody(req) {
   });
 }
 
-/** Dot-path lookup: "$.a.b[0]" -> value. */
-function dig(obj, expr) {
-  const p = expr.replace(/^\$\.?/, '').replace(/\[(\d+)\]/g, '.$1');
-  let cur = obj;
-  for (const key of p.split('.')) {
-    if (key === '') continue;
-    if (cur == null) return undefined;
-    cur = cur[key];
-  }
-  return cur;
-}
+// The query-string shorthand used to have its own dot-path lookup here. It now
+// goes through the same profile machinery as everything else, which is one
+// code path instead of two -- and its lookup walked properties without
+// guarding them, so `?magnitude=$.__proto__.x` reached a prototype. The
+// expression engine does not.
 
-const FIELDS = ['magnitude', 'polarity', 'id', 'label', 'url', 'category', 'accent', 'ts'];
+// --- profiles -------------------------------------------------------------
+
+const PROFILE_DIR = path.join(ROOT, 'profiles');
+const compiled = new Map(); // name -> compiled profile
 
 /**
- * Build an event from an arbitrary payload plus a query-string mapping.
- * A value starting with `$.` is a path into the payload; anything else is a
- * literal. That single rule is what lets any JSON on earth be piped in.
+ * Load and compile a profile by name.
+ *
+ * Names are a single path segment and are checked against the directory
+ * listing rather than joined blindly, so `?profile=../../etc/passwd` selects
+ * nothing. Compiled profiles are cached: parsing is the expensive half and a
+ * profile is applied to every event.
  */
-function shape(payload, query) {
-  const out = {};
-  let mapped = false;
-  for (const f of FIELDS) {
-    const spec = query.get(f);
-    if (spec == null) continue;
-    mapped = true;
-    out[f] = spec.startsWith('$') ? dig(payload, spec) : spec;
+function profileByName(name) {
+  if (!/^[A-Za-z0-9._-]{1,64}$/.test(name) || name.startsWith('.')) return null;
+  if (compiled.has(name)) return compiled.get(name);
+  const file = path.join(PROFILE_DIR, name + '.json');
+  if (!file.startsWith(PROFILE_DIR + path.sep) || !fs.existsSync(file)) return null;
+  try {
+    const p = compileProfile(JSON.parse(fs.readFileSync(file, 'utf8')));
+    compiled.set(name, p);
+    return p;
+  } catch (e) {
+    return null;
   }
-  if (!mapped) return payload;
-  if (payload && typeof payload === 'object') out.data = payload;
-  return out;
+}
+
+/** The published schemas, served so tooling can validate against them. */
+function serveSchema(res, file) {
+  const p = path.join(ROOT, 'spec', file);
+  if (!fs.existsSync(p)) return json(res, 404, { error: 'schema not found' });
+  cors(res);
+  const buf = fs.readFileSync(p);
+  res.writeHead(200, {
+    'Content-Type': 'application/schema+json; charset=utf-8',
+    'Content-Length': buf.length,
+  });
+  return res.end(buf);
+}
+
+function listProfiles() {
+  let files = [];
+  try {
+    files = fs.readdirSync(PROFILE_DIR).filter((f) => f.endsWith('.json'));
+  } catch (e) {
+    return [];
+  }
+  return files.map((f) => {
+    const name = f.slice(0, -5);
+    try {
+      const doc = JSON.parse(fs.readFileSync(path.join(PROFILE_DIR, f), 'utf8'));
+      const v = validateProfile(doc);
+      return {
+        name: doc.name || name,
+        description: doc.description || '',
+        fields: Object.keys(doc.map || {}),
+        valid: v.ok,
+        problems: v.problems,
+      };
+    } catch (e) {
+      return { name, description: '', fields: [], valid: false, problems: [String(e.message)] };
+    }
+  });
+}
+
+/**
+ * Work out which mapping a request wants, and where the payloads are.
+ *
+ * Three ways in, in order of precedence: a profile sent inline with the
+ * request, a saved profile named in the query, and the original query-string
+ * shorthand. Returning the reason for a refusal matters as much as returning
+ * the profile: an unusable mapping is the single most likely thing to go wrong.
+ */
+function resolveMapping(body, query) {
+  if (body && typeof body === 'object' && !Array.isArray(body) && body.profile !== undefined) {
+    const doc = body.profile;
+    if (typeof doc === 'string') {
+      const p = profileByName(doc);
+      if (!p) return { error: `no profile named "${doc}"`, status: 404 };
+      return { profile: p, items: body.events !== undefined ? body.events : [] };
+    }
+    const v = validateProfile(doc);
+    if (!v.ok) return { error: 'invalid profile', problems: v.problems, status: 400 };
+    return { profile: compileProfile(doc), items: body.events !== undefined ? body.events : [] };
+  }
+
+  const named = query.get('profile');
+  if (named) {
+    const p = profileByName(named);
+    if (!p) return { error: `no profile named "${named}"`, status: 404 };
+    return { profile: p, items: body };
+  }
+
+  const fromQuery = profileFromQuery(query);
+  if (fromQuery) return { profile: compileProfile(fromQuery), items: body };
+
+  return { profile: null, items: body };
 }
 
 function coerce(raw) {
@@ -169,10 +252,29 @@ async function handleEmit(req, res, url) {
   }
   if (payload == null) payload = Object.fromEntries(url.searchParams);
 
-  const list = Array.isArray(payload) ? payload : [payload];
+  const m = resolveMapping(payload, url.searchParams);
+  if (m.error) return json(res, m.status, { error: m.error, problems: m.problems });
+
+  const list = Array.isArray(m.items) ? m.items : [m.items];
   let accepted = 0;
+  let skipped = 0;
+  const problems = [];
+
   for (const item of list) {
-    const ev = coerce(shape(item, url.searchParams));
+    let ev = null;
+    if (m.profile) {
+      const r = m.profile.apply(item);
+      if (r.skipped) {
+        skipped++;
+        continue;
+      }
+      // Only the first few reasons: a bad mapping fails on every record, and
+      // ten thousand copies of one message helps nobody.
+      if (!r.event && problems.length < 5) problems.push(...r.errors);
+      ev = r.event ? coerce(r.raw) : null;
+    } else {
+      ev = coerce(item);
+    }
     if (!ev) {
       stats.rejected++;
       continue;
@@ -180,10 +282,76 @@ async function handleEmit(req, res, url) {
     broadcast(ev);
     accepted++;
   }
-  return json(res, accepted ? 202 : 400, {
+
+  const body = {
     accepted,
-    rejected: list.length - accepted,
+    skipped,
+    rejected: list.length - accepted - skipped,
     listeners: clients.size,
+  };
+  if (problems.length) body.problems = problems;
+  if (m.profile) body.profile = m.profile.name;
+  // Accepting nothing is only an error if nothing was deliberately skipped.
+  return json(res, accepted || skipped ? 202 : 400, body);
+}
+
+/**
+ * Say what the engine understood, without making a sound.
+ *
+ * A mapping is something you have to get working, and debugging it by
+ * listening is hopeless. This answers with the event, which expression fed
+ * each field, what each evaluated to, and why anything was refused.
+ */
+async function handleExplain(req, res, url) {
+  let payload = null;
+  if (req.method === 'POST') {
+    let text;
+    try {
+      text = await readBody(req);
+    } catch (e) {
+      return json(res, 413, { error: String(e.message) });
+    }
+    if (text.trim()) {
+      try {
+        payload = JSON.parse(text);
+      } catch (e) {
+        return json(res, 400, { error: 'invalid JSON body' });
+      }
+    }
+  }
+  if (payload == null) payload = Object.fromEntries(url.searchParams);
+
+  const m = resolveMapping(payload, url.searchParams);
+  if (m.error) return json(res, m.status, { error: m.error, problems: m.problems });
+
+  const first = Array.isArray(m.items) ? m.items[0] : m.items;
+  if (first === undefined) {
+    return json(res, 400, { error: 'nothing to explain: send a payload' });
+  }
+
+  if (!m.profile) {
+    const ev = coerce(first);
+    return json(res, 200, {
+      event: EVENT_VERSION,
+      profile: null,
+      note: 'No mapping was given, so the payload was read as an event directly.',
+      accepted: Boolean(ev),
+      result: ev,
+      problems: ev ? [] : ['no finite "magnitude" field in the payload'],
+    });
+  }
+
+  const r = m.profile.apply(first);
+  return json(res, 200, {
+    event: EVENT_VERSION,
+    mapping: MAPPING_VERSION,
+    profile: m.profile.name,
+    input: first,
+    skipped: r.skipped,
+    accepted: Boolean(r.event),
+    result: r.event,
+    fields: r.trace,
+    problems: r.errors,
   });
 }
 
@@ -246,7 +414,15 @@ const server = http.createServer((req, res) => {
   }
 
   if (url.pathname === '/emit') return handleEmit(req, res, url);
+  if (url.pathname === '/explain') return handleExplain(req, res, url);
   if (url.pathname === '/events') return handleEvents(req, res, url);
+  if (url.pathname === '/profiles') {
+    return json(res, 200, { mapping: MAPPING_VERSION, profiles: listProfiles() });
+  }
+  if (url.pathname === '/schema' || url.pathname === '/schema/event') {
+    return serveSchema(res, 'event.schema.json');
+  }
+  if (url.pathname === '/schema/mapping') return serveSchema(res, 'mapping.schema.json');
   if (url.pathname === '/stats') {
     return json(res, 200, {
       ...stats,

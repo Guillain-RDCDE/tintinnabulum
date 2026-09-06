@@ -27,8 +27,10 @@ Nothing to install; it runs in a browser, and on a phone.
 
 - **[How it works](docs/HOW-IT-WORKS.md)** — the whole path, from the feed to
   the speaker, in plain language first.
-- **[Reference](docs/REFERENCE.md)** — the event contract, the library API, the
-  eight built-in feeds, the twelve kits, the seventeen scenes and palettes.
+- **[The input standard](spec/README.md)** — one required field, and a mapping
+  document that plugs anything else in without writing code.
+- **[Reference](docs/REFERENCE.md)** — the library API, the eight built-in
+  feeds, the twelve kits, the seventeen scenes and palettes.
 
 ## Thanks
 

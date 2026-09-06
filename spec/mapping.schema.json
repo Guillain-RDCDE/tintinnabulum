@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://guillain-rdcde.github.io/tintinnabulum/spec/mapping.schema.json",
+  "title": "Tintinnabulum mapping profile",
+  "version": "tintinnabulum.mapping/1",
+  "description": "How one kind of data becomes events. A profile is a document, not code: it can be committed, reviewed, diffed and shared, so a producer adopting Tintinnabulum writes one instead of writing a transformer.",
+  "type": "object",
+  "required": ["map"],
+  "additionalProperties": false,
+  "properties": {
+    "profile": {
+      "const": "tintinnabulum.mapping/1",
+      "description": "Version of this document format. Omitted means the current one."
+    },
+    "name": {
+      "type": "string",
+      "description": "What this profile is called. A profile stored in profiles/<name>.json can be selected with ?profile=<name>.",
+      "examples": ["http-access-log"]
+    },
+    "description": {
+      "type": "string",
+      "description": "What kind of data this expects, in one sentence."
+    },
+    "where": {
+      "type": "string",
+      "description": "An expression. When present, a payload is turned into an event only if this is truthy. Use it to drop what you do not want to hear, at the source rather than by filtering later.",
+      "examples": ["$.status >= 400", "$.level != 'debug'"]
+    },
+    "map": {
+      "type": "object",
+      "required": ["magnitude"],
+      "additionalProperties": false,
+      "description": "One entry per event field. Each value is an expression in the mapping language, or {\"const\": value} for a fixed value. Only `magnitude` is required: it is the one field the engine cannot invent.",
+      "properties": {
+        "magnitude": { "$ref": "#/$defs/spec" },
+        "polarity": { "$ref": "#/$defs/spec" },
+        "id": { "$ref": "#/$defs/spec" },
+        "category": { "$ref": "#/$defs/spec" },
+        "accent": { "$ref": "#/$defs/spec" },
+        "label": { "$ref": "#/$defs/spec" },
+        "url": { "$ref": "#/$defs/spec" },
+        "ts": { "$ref": "#/$defs/spec" },
+        "source": { "$ref": "#/$defs/spec" }
+      }
+    }
+  },
+  "$defs": {
+    "spec": {
+      "description": "An expression string, or a constant.",
+      "oneOf": [
+        {
+          "type": "string",
+          "maxLength": 2000,
+          "description": "An expression. `$` is the payload. See spec/README.md for the grammar and the function list."
+        },
+        {
+          "type": "object",
+          "required": ["const"],
+          "additionalProperties": false,
+          "properties": { "const": { "description": "Used verbatim, never evaluated." } }
+        }
+      ]
+    }
+  }
+}

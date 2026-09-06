@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://guillain-rdcde.github.io/tintinnabulum/spec/event.schema.json",
+  "title": "Tintinnabulum event",
+  "version": "tintinnabulum.event/1",
+  "description": "One thing that happened, described so it can be heard and seen. Only `magnitude` is required: everything else has a defined default, because a source that cannot supply a field should not be forced to invent one.",
+  "type": "object",
+  "required": ["magnitude"],
+  "additionalProperties": false,
+  "properties": {
+    "magnitude": {
+      "type": "number",
+      "description": "How big the event is, in whatever unit the source uses. Drives pitch and size. A negative value carries its own polarity unless `polarity` says otherwise. The engine calibrates itself against the values it sees, so the unit does not have to be normalised or known in advance.",
+      "examples": [1200, 0.35, -480]
+    },
+    "polarity": {
+      "enum": [-1, 0, 1],
+      "default": 0,
+      "description": "Direction, and therefore which instrument plays: 1 rings, -1 plucks, 0 is neutral. Supply it only when direction means something in your data.",
+      "examples": [1, -1]
+    },
+    "id": {
+      "type": "string",
+      "description": "Stable identity. The same id always lands in the same place on screen, so a thing that happens repeatedly pulses in one spot instead of scattering. Defaults to a generated id, which scatters.",
+      "examples": ["GET /api/users", "sensor-14"]
+    },
+    "category": {
+      "type": "string",
+      "default": "default",
+      "description": "A free-form bucket that selects colour, and may override the instrument. Any string is valid; the palettes name `user`, `anon`, `bot` and `alert`, and anything else falls back to the palette's default colour rather than disappearing.",
+      "examples": ["user", "anon", "bot", "alert", "checkout-service"]
+    },
+    "accent": {
+      "type": "boolean",
+      "default": false,
+      "description": "A rare, notable event: plays the swell, shows a banner, and outranks ordinary events when only one may sound. Mark few things with this, or it stops meaning anything.",
+      "examples": [true]
+    },
+    "label": {
+      "type": "string",
+      "default": "",
+      "description": "Human-readable text, shown on hover and briefly on arrival. Keep it short, and remember it is displayed: do not put anything here you would not put on a screen unasked.",
+      "examples": ["POST /checkout 503"]
+    },
+    "url": {
+      "type": "string",
+      "format": "uri",
+      "default": "",
+      "description": "Opened when the mark is clicked. Omit it and the mark is not clickable.",
+      "examples": ["https://en.wikipedia.org/wiki/Bell"]
+    },
+    "ts": {
+      "type": "number",
+      "description": "When it happened, in milliseconds since the epoch. Defaults to the moment of arrival. Supplying a real timestamp is what lets a batch of past events be replayed with their own timing rather than as a metronome.",
+      "examples": [1757152800000]
+    },
+    "source": {
+      "type": "string",
+      "default": "",
+      "description": "Name of whatever produced the event. Informational: it is shown in the activity log and carried through.",
+      "examples": ["ingest", "wikipedia"]
+    },
+    "data": {
+      "description": "Your original payload, passed through untouched and never interpreted. Whatever the mapping did not use is still here.",
+      "examples": [{ "any": "json" }]
+    }
+  }
+}

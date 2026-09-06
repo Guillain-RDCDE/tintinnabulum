@@ -1,0 +1,15 @@
+{
+  "profile": "tintinnabulum.mapping/1",
+  "name": "git-commit",
+  "description": "Commits as events: lines changed as pitch, additions ring and deletions pluck.",
+  "map": {
+    "magnitude": "coalesce($.stats.total, $.additions + $.deletions, 1)",
+    "polarity": "($.additions ? $.additions : 0) >= ($.deletions ? $.deletions : 0) ? 1 : -1",
+    "id": "coalesce($.author.email, $.author.name, 'unknown')",
+    "category": "contains(lower(coalesce($.message, '')), 'revert') ? 'alert' : 'user'",
+    "label": "at(split(coalesce($.message, ''), '\n'), 0)",
+    "url": "coalesce($.url, '')",
+    "ts": "epoch(coalesce($.timestamp, $.date))",
+    "source": { "const": "git" }
+  }
+}
