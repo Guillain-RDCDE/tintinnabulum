@@ -29,28 +29,10 @@ import {
   WIKIPEDIA_FLAG_CC,
 } from '../src/index.js';
 
-const $ = (sel) => document.querySelector(sel);
+import { $, createPicker, fitCanvas, caption } from './dom.js';
+import { store } from './store.js';
 
-// Per-viewer conveniences only. Storage can be unavailable (private window,
-// blocked site data) and must never break the page.
-const store = {
-  get(k) {
-    try {
-      return localStorage.getItem(k);
-    } catch {
-      return null;
-    }
-  },
-  set(k, v) {
-    try {
-      localStorage.setItem(k, String(v));
-    } catch {
-      /* ignore */
-    }
-  },
-};
-
-const storedPalette = PALETTES[store.get('t:palette')] ? store.get('t:palette') : DEFAULT_PALETTE_NAME;
+const storedPalette = store.pick('palette', PALETTES, DEFAULT_PALETTE_NAME);
 
 const son = new Sonifier({
   kit: 'hatnote',
@@ -225,8 +207,8 @@ const FEEDS = {
   },
 };
 
-let feed = FEEDS[store.get('t:feed')] ? store.get('t:feed') : 'wikipedia';
-let langs = (store.get('t:langs') || 'en').split(',').filter(Boolean);
+let feed = store.pick('feed', FEEDS, 'wikipedia');
+let langs = (store.get('langs') || 'en').split(',').filter(Boolean);
 if (!langs.length) langs = ['en'];
 
 const startBtn = $('#start');
@@ -241,67 +223,63 @@ function selectFeed(name, persist = true) {
   $('#feed-note').textContent = FEEDS[name].note;
   $('#langs-wrap').hidden = !FEEDS[name].langs;
   $('#ingest-wrap').hidden = !FEEDS[name].needsUrl;
-  for (const b of $('#feeds').children) b.setAttribute('aria-pressed', String(b.dataset.feed === name));
+  feedPicker.mark(name);
   // Feeds differ by two orders of magnitude in rate, so each may cap its own.
   son.pool.maxPerSecond = FEEDS[name].maxPerSecond || 0;
-  if (persist) store.set('t:feed', name);
+  if (persist) store.set('feed', name);
   if (startBtn.dataset.on !== 'true') setRunning(false);
 }
 
-for (const [name, def] of Object.entries(FEEDS)) {
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'card';
-  btn.dataset.feed = name;
-  btn.setAttribute('aria-pressed', 'false');
-  btn.innerHTML = '<b></b><span></span>';
-  btn.querySelector('b').textContent = def.label;
-  btn.querySelector('span').textContent = def.blurb;
-  btn.addEventListener('click', () => {
+const feedPicker = createPicker($('#feeds'), Object.entries(FEEDS), {
+  key: 'feed',
+  className: 'card',
+  render: (btn, def) => btn.append(caption(def.label, def.blurb, { wrap: false })),
+  onPick: (name) => {
     selectFeed(name);
     if (startBtn.dataset.on === 'true') startFeed();
-  });
-  $('#feeds').appendChild(btn);
-}
+  },
+});
 
 // --- Wikipedia editions ---------------------------------------------------
-const langGrid = $('#langs-grid');
 function syncLangs(persist = true) {
-  for (const b of langGrid.children) b.setAttribute('aria-pressed', String(langs.includes(b.dataset.lang)));
+  langPicker.mark(langs);
   $('#langs').value = langs.join(',');
-  if (persist) store.set('t:langs', langs.join(','));
+  if (persist) store.set('langs', langs.join(','));
 }
 
-for (const l of WIKIPEDIA_LANGUAGES) {
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'lang';
-  btn.dataset.lang = l.code;
-  btn.title = `${l.name} — ${l.native} (${l.code})`;
-  btn.setAttribute('aria-pressed', 'false');
-  // An image, not an emoji: Windows ships no flag glyphs, so emoji flags show
-  // as the bare letters "GB" for every visitor on a PC.
-  const fl = document.createElement('img');
-  fl.className = 'fl';
-  fl.src = `flags/${WIKIPEDIA_FLAG_CC[l.code] || 'eo'}.svg`;
-  fl.alt = '';
-  fl.width = 24;
-  fl.height = 18;
-  fl.loading = 'lazy';
-  const nm = document.createElement('span');
-  nm.className = 'nm';
-  nm.textContent = l.native;
-  btn.append(fl, nm);
-  btn.addEventListener('click', () => {
-    const i = langs.indexOf(l.code);
-    if (i >= 0) langs.splice(i, 1);
-    else langs.push(l.code);
-    if (!langs.length) langs = ['en']; // never leave nothing selected
-    syncLangs();
-    if (startBtn.dataset.on === 'true' && FEEDS[feed].langs) startFeed();
-  });
-  langGrid.appendChild(btn);
-}
+const langPicker = createPicker(
+  $('#langs-grid'),
+  WIKIPEDIA_LANGUAGES.map((l) => [l.code, l]),
+  {
+    key: 'lang',
+    className: 'lang',
+    multi: true,
+    title: (l) => `${l.name} — ${l.native} (${l.code})`,
+    render: (btn, l) => {
+      // An image, not an emoji: Windows ships no flag glyphs, so emoji flags
+      // show as the bare letters "GB" for every visitor on a PC.
+      const fl = document.createElement('img');
+      fl.className = 'fl';
+      fl.src = `flags/${WIKIPEDIA_FLAG_CC[l.code] || 'eo'}.svg`;
+      fl.alt = '';
+      fl.width = 24;
+      fl.height = 18;
+      fl.loading = 'lazy';
+      const nm = document.createElement('span');
+      nm.className = 'nm';
+      nm.textContent = l.native;
+      btn.append(fl, nm);
+    },
+    onPick: (code) => {
+      const i = langs.indexOf(code);
+      if (i >= 0) langs.splice(i, 1);
+      else langs.push(code);
+      if (!langs.length) langs = ['en']; // never leave nothing selected
+      syncLangs();
+      if (startBtn.dataset.on === 'true' && FEEDS[feed].langs) startFeed();
+    },
+  }
+);
 
 // The same setting, typed rather than clicked. One state, two ways in.
 $('#langs').addEventListener('change', () => {
@@ -338,15 +316,15 @@ startBtn.onclick = async () => {
 // Sound
 // =========================================================================
 
-let currentKit = KITS[store.get('t:kit')] ? store.get('t:kit') : 'hatnote';
+let currentKit = store.pick('kit', KITS, 'hatnote');
 
 async function selectKit(name, { persist = true, audition = true } = {}) {
   if (!KITS[name]) return;
   currentKit = name;
   $('#kit-note').textContent = KITS[name].note;
-  for (const b of $('#kits').children) b.setAttribute('aria-pressed', String(b.dataset.kit === name));
+  kitPicker.mark(name);
   if (persist) {
-    store.set('t:kit', name);
+    store.set('kit', name);
     sampleState = 'chosen'; // an explicit choice is never overridden
   }
   await son.setKit(name); // while locked this only assigns
@@ -365,51 +343,28 @@ async function selectKit(name, { persist = true, audition = true } = {}) {
 // same thing, and the point of a picker is that you recognise the water and
 // the night without reading the labels.
 function paintKitArt(cv, name) {
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
-  const w = cv.clientWidth || 148;
-  const h = 64;
-  cv.width = Math.round(w * dpr);
-  cv.height = Math.round(h * dpr);
-  const c = cv.getContext('2d');
-  c.setTransform(dpr, 0, 0, dpr, 0, 0);
-  drawKitArt(c, name, { w, h, palette: PALETTES[canvas.paletteName].colors });
+  const { ctx, w, h } = fitCanvas(cv, { height: 64 });
+  drawKitArt(ctx, name, { w, h, palette: PALETTES[canvas.paletteName].colors });
 }
 
-for (const [name, def] of Object.entries(KITS)) {
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'card';
-  btn.dataset.kit = name;
-  btn.setAttribute('aria-pressed', 'false');
-  btn.title = def.note;
-  const cv = document.createElement('canvas');
-  const cap = document.createElement('span');
-  cap.className = 'cap';
-  cap.innerHTML = '<b></b><span></span>';
-  cap.querySelector('b').textContent = def.label;
-  cap.querySelector('span').textContent = def.sampled ? 'Recorded samples' : 'Synthesised';
-  btn.append(cv, cap);
-  btn.addEventListener('click', async () => {
+const kitPicker = createPicker($('#kits'), Object.entries(KITS), {
+  key: 'kit',
+  className: 'card',
+  title: (def) => def.note,
+  render: (btn, def) => {
+    btn.append(
+      document.createElement('canvas'),
+      caption(def.label, def.sampled ? 'Recorded samples' : 'Synthesised')
+    );
+  },
+  onPick: async (name) => {
     await ensureAudio();
     selectKit(name);
-  });
-  $('#kits').appendChild(btn);
-}
+  },
+});
 
-// Waveforms are rendered one after another rather than all at once: each is a
-// short offline render, and a dozen in parallel stalls the first paint.
-function paintKitWaves() {
-  for (const b of $('#kits').children) {
-    // One kit failing must not cost the other eleven their thumbnails, which
-    // is exactly what a bare sequential await did.
-    try {
-      paintKitArt(b.querySelector('canvas'), b.dataset.kit);
-    } catch (e) {
-      console.warn('waveform failed for ' + b.dataset.kit, e);
-    }
-  }
-}
-requestAnimationFrame(() => paintKitWaves());
+const paintKitArts = () => kitPicker.repaint(paintKitArt);
+requestAnimationFrame(paintKitArts);
 
 const scaleSel = $('#scale');
 for (const name of Object.keys(SCALES)) {
@@ -478,140 +433,122 @@ function selectScene(name, persist = true) {
   if (!SCENES[name]) return;
   canvas.setScene(name);
   $('#scene-note').textContent = SCENES[name].note;
-  for (const b of $('#scenes').children) b.setAttribute('aria-pressed', String(b.dataset.scene === name));
+  scenePicker.mark(name);
   const usesShapes = name === 'bloom';
   $('#shapes').style.opacity = usesShapes ? '1' : '.4';
   $('#shapes').style.pointerEvents = usesShapes ? '' : 'none';
   $('#shapes-label').textContent = usesShapes ? 'Shapes' : 'Shapes — used by Bloom only';
-  if (persist) store.set('t:scene', name);
+  if (persist) store.set('scene', name);
 }
 
 // Each card carries a still drawn by the scene itself, against synthetic
 // events. A stored image would go stale the moment a palette changed; this
 // cannot disagree with what you are about to launch.
 function paintScenePreview(cv, name) {
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
-  const w = cv.clientWidth || 148;
-  const h = 84;
-  cv.width = Math.round(w * dpr);
-  cv.height = Math.round(h * dpr);
-  const c = cv.getContext('2d');
-  c.setTransform(dpr, 0, 0, dpr, 0, 0);
-  previewScene(c, name, {
-    w, h,
+  const { ctx, w, h } = fitCanvas(cv, { height: 84 });
+  previewScene(ctx, name, {
+    w,
+    h,
     palette: PALETTES[canvas.paletteName].colors,
     shape: canvas.shape,
   });
 }
 
-for (const [name, def] of Object.entries(SCENES)) {
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'card';
-  btn.dataset.scene = name;
-  btn.setAttribute('aria-pressed', 'false');
-  btn.title = def.note;
-  const cv = document.createElement('canvas');
-  const cap = document.createElement('span');
-  cap.className = 'cap';
-  cap.innerHTML = '<b></b><span></span>';
-  cap.querySelector('b').textContent = def.label;
-  cap.querySelector('span').textContent =
-    def.positional === false ? 'Composed view' : 'One mark per event';
-  btn.append(cv, cap);
-  btn.addEventListener('click', () => selectScene(name));
-  $('#scenes').appendChild(btn);
-  requestAnimationFrame(() => paintScenePreview(cv, name));
-}
+const scenePicker = createPicker($('#scenes'), Object.entries(SCENES), {
+  key: 'scene',
+  className: 'card',
+  title: (def) => def.note,
+  render: (btn, def) => {
+    btn.append(
+      document.createElement('canvas'),
+      caption(def.label, def.positional === false ? 'Composed view' : 'One mark per event')
+    );
+  },
+  onPick: (name) => selectScene(name),
+});
 
-function repaintScenePreviews() {
-  for (const b of $('#scenes').children) paintScenePreview(b.querySelector('canvas'), b.dataset.scene);
-}
+const repaintScenePreviews = () => scenePicker.repaint(paintScenePreview);
+requestAnimationFrame(repaintScenePreviews);
 
-const paletteGrid = $('#palettes');
 function selectPalette(name, persist = true) {
   canvas.setPalette(name);
   canvas.canvas.style.background = PALETTES[name].colors.background;
   $('#palette-note').textContent = PALETTES[name].note;
-  for (const b of paletteGrid.children) b.setAttribute('aria-pressed', String(b.dataset.palette === name));
-  if (persist) store.set('t:palette', name);
-  // The swatches and the scene stills are drawn in the palette's own colours,
-  // so they follow the choice rather than lying about it.
-  if ($('#shapes').children.length) repaintShapeSwatches();
-  if ($('#scenes').children.length) repaintScenePreviews();
-  if ($('#kits').children.length) paintKitWaves();
+  palettePicker.mark(name);
+  if (persist) store.set('palette', name);
+  // The swatches and the stills are drawn in the palette's own colours, so
+  // they follow the choice rather than lying about it.
+  repaintShapeSwatches();
+  repaintScenePreviews();
+  paintKitArts();
 }
 
-for (const [name, def] of Object.entries(PALETTES)) {
-  const { background, dots } = swatchOf(name);
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'sw';
-  btn.dataset.palette = name;
-  btn.title = def.note;
-  btn.setAttribute('aria-pressed', 'false');
-  btn.innerHTML =
-    `<span class="chip" style="background:${background}">` +
-    dots.map((c) => `<i style="background:${c}"></i>`).join('') +
-    `</span><small>${def.label}</small>`;
-  btn.addEventListener('click', () => selectPalette(name));
-  paletteGrid.appendChild(btn);
-}
+const palettePicker = createPicker($('#palettes'), Object.entries(PALETTES), {
+  key: 'palette',
+  className: 'sw',
+  title: (def) => def.note,
+  render: (btn, def, name) => {
+    const { background, dots } = swatchOf(name);
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.style.background = background;
+    for (const colour of dots) {
+      const dot = document.createElement('i');
+      dot.style.background = colour;
+      chip.append(dot);
+    }
+    const label = document.createElement('small');
+    label.textContent = def.label;
+    btn.append(chip, label);
+  },
+  onPick: (name) => selectPalette(name),
+});
 
 // Swatches are drawn with the same drawShape() the canvas uses, so a preview
 // can never drift from the result.
 const SHAPE_CHOICES = [...Object.keys(SHAPES), 'mixed'];
 const SHAPE_LABELS = { ...SHAPES, mixed: { label: 'Mixed', note: 'A shape per event, fixed by its identity.' } };
-const shapeGrid = $('#shapes');
-
 function selectShape(name, persist = true) {
   canvas.setShape(name);
   $('#shape-note').textContent = SHAPE_LABELS[name].note;
-  for (const b of shapeGrid.children) b.setAttribute('aria-pressed', String(b.dataset.shape === name));
-  if (persist) store.set('t:shape', name);
+  shapePicker.mark(name);
+  if (persist) store.set('shape', name);
 }
 
 function paintSwatch(cv, name) {
-  const dpr = window.devicePixelRatio || 1;
-  const w = cv.clientWidth || 76;
-  const h = 42;
-  cv.width = Math.round(w * dpr);
-  cv.height = Math.round(h * dpr);
-  const c = cv.getContext('2d');
-  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const { ctx, w, h } = fitCanvas(cv, { height: 42, fallbackWidth: 76 });
   const colors = PALETTES[canvas.paletteName].colors;
-  c.fillStyle = colors.background;
-  c.fillRect(0, 0, w, h);
-  c.fillStyle = colors.anon;
-  c.globalAlpha = 0.9;
-  c.beginPath();
-  drawShape(c, name, w / 2, h / 2, 13, -0.25, 0.4);
-  c.fill(name === 'ring' ? 'evenodd' : 'nonzero');
+  ctx.fillStyle = colors.background;
+  ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = colors.anon;
+  ctx.globalAlpha = 0.9;
+  ctx.beginPath();
+  drawShape(ctx, name, w / 2, h / 2, 13, -0.25, 0.4);
+  ctx.fill(name === 'ring' ? 'evenodd' : 'nonzero');
 }
 
-for (const name of SHAPE_CHOICES) {
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'sw';
-  btn.dataset.shape = name;
-  btn.title = SHAPE_LABELS[name].note;
-  btn.setAttribute('aria-pressed', 'false');
-  const cv = document.createElement('canvas');
-  const small = document.createElement('small');
-  small.textContent = SHAPE_LABELS[name].label;
-  btn.append(cv, small);
-  btn.addEventListener('click', () => selectShape(name));
-  shapeGrid.appendChild(btn);
-  requestAnimationFrame(() => paintSwatch(cv, name));
-}
+const shapePicker = createPicker(
+  $('#shapes'),
+  SHAPE_CHOICES.map((name) => [name, SHAPE_LABELS[name]]),
+  {
+    key: 'shape',
+    className: 'sw',
+    title: (def) => def.note,
+    render: (btn, def) => {
+      const label = document.createElement('small');
+      label.textContent = def.label;
+      btn.append(document.createElement('canvas'), label);
+    },
+    onPick: (name) => selectShape(name),
+  }
+);
 
-function repaintShapeSwatches() {
-  for (const b of shapeGrid.children) paintSwatch(b.querySelector('canvas'), b.dataset.shape);
-}
+const repaintShapeSwatches = () => shapePicker.repaint(paintSwatch);
+requestAnimationFrame(repaintShapeSwatches);
 
 $('#starfield').addEventListener('change', (e) => {
   canvas.setStarfield(e.target.checked);
-  store.set('t:starfield', e.target.checked ? '1' : '0');
+  store.setFlag('starfield', e.target.checked);
 });
 $('#labels').addEventListener('change', (e) => (canvas.showLabels = e.target.checked));
 $('#hud').addEventListener('change', (e) => (canvas.showHud = e.target.checked));
@@ -689,12 +626,12 @@ selectFeed(feed, false);
 syncLangs(false);
 selectKit(currentKit, { persist: false, audition: false });
 selectPalette(canvas.paletteName, false);
-selectShape(SHAPE_CHOICES.includes(store.get('t:shape')) ? store.get('t:shape') : DEFAULT_SHAPE, false);
-selectScene(SCENES[store.get('t:scene')] ? store.get('t:scene') : DEFAULT_SCENE, false);
+selectShape(store.pick('shape', SHAPE_LABELS, DEFAULT_SHAPE), false);
+selectScene(store.pick('scene', SCENES, DEFAULT_SCENE), false);
 $('#cats').addEventListener('change', updateSummaries);
 $('#minmag').addEventListener('input', updateSummaries);
 updateSummaries();
-$('#starfield').checked = store.get('t:starfield') === '1';
+$('#starfield').checked = store.flag('starfield');
 canvas.setStarfield($('#starfield').checked);
 setRunning(false);
 setAudioStatus('');
