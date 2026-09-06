@@ -518,7 +518,7 @@ ok('shaded marks are on by default and can be turned off',
 // exactly that the moment it started calling api.fill(), which previewScene
 // did not yet provide. Errors are surfaced here rather than swallowed.
 const scenePreviews = await page.evaluate(async () => {
-  const { SCENES, previewScene, PALETTES } = await import('/src/index.js');
+  const { SCENES, previewScene, PALETTES } = await import('../src/index.js');
   const palette = PALETTES.marine.colors;
   const results = [];
   for (const name of Object.keys(SCENES)) {
@@ -553,7 +553,7 @@ ok('every scene preview paints something', blankPreviews.length === 0,
 // The cards must follow the colour settings, or they advertise a look the
 // canvas will not deliver.
 const previewFollows = await page.evaluate(async () => {
-  const { previewScene, PALETTES } = await import('/src/index.js');
+  const { previewScene, PALETTES } = await import('../src/index.js');
   const palette = PALETTES.marine.colors;
   const count = (richness, depth) => {
     const cv = document.createElement('canvas');
@@ -617,7 +617,7 @@ const bounded = await page.evaluate(async () => {
   sink.showHud = hudWas;
 
   // Every scene, since each keeps collections of its own.
-  const { SCENES } = await import('/src/index.js');
+  const { SCENES } = await import('../src/index.js');
   const perScene = [];
   for (const name of Object.keys(SCENES)) {
     sink.setScene(name);
