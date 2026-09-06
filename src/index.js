@@ -36,7 +36,7 @@ export {
   registerScene,
   previewScene,
   noise2,
-} from './visual/scenes.js';
+} from './visual/scenes/index.js';
 export {
   PALETTES,
   PALETTE_KEYS,

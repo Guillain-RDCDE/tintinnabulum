@@ -1,7 +1,7 @@
 import { rngFrom } from '../core/event.js';
 import { PALETTES, DEFAULT_PALETTE_NAME, resolvePalette } from './palettes.js';
 import { SHAPES, DEFAULT_SHAPE } from './shapes.js';
-import { SCENES, DEFAULT_SCENE } from './scenes.js';
+import { SCENES, DEFAULT_SCENE } from './scenes/index.js';
 
 // Canvas 2D rewrite of the original D3 v3 visuals.
 //
@@ -12,7 +12,7 @@ import { SCENES, DEFAULT_SCENE } from './scenes.js';
 
 export { PALETTES, DEFAULT_PALETTE_NAME, resolvePalette } from './palettes.js';
 export { SHAPES, SHAPE_NAMES, DEFAULT_SHAPE } from './shapes.js';
-export { SCENES, SCENE_NAMES, DEFAULT_SCENE, registerScene } from './scenes.js';
+export { SCENES, SCENE_NAMES, DEFAULT_SCENE, registerScene } from './scenes/index.js';
 
 /** The default colours, kept as a named export for convenience. */
 export const DEFAULT_PALETTE = resolvePalette(DEFAULT_PALETTE_NAME);
@@ -117,11 +117,6 @@ export class CanvasSink {
     return this.palette[ev.category] || this.palette.default;
   }
 
-  /**
-   * Switch palette at runtime. Circles already on screen are recoloured from
-   * the category they were born with, so a change takes effect immediately
-   * instead of waiting for the canvas to turn over.
-   */
   /** The surface handed to the active scene each frame. */
   _sceneApi(now = 0) {
     return {
@@ -183,6 +178,11 @@ export class CanvasSink {
     }));
   }
 
+  /**
+   * Switch palette at runtime. Marks already on screen are recoloured from the
+   * category they were born with, so a change takes effect immediately instead
+   * of waiting for the canvas to turn over.
+   */
   setPalette(nameOrColors) {
     this.palette = resolvePalette(nameOrColors);
     this.paletteName =

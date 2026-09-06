@@ -605,7 +605,7 @@ ok('the sink reports the shape in use',
 // nothing, would leave a blank canvas while the audio carried on -- the visual
 // twin of the silent-audio bug this project keeps running into.
 const sceneNames = await page.evaluate(async () => {
-  const m = await import('../src/visual/scenes.js');
+  const m = await import('../src/visual/scenes/index.js');
   return m.SCENE_NAMES;
 });
 ok('several visualisations are available', sceneNames.length >= 6, sceneNames.join(', '));
@@ -700,7 +700,7 @@ await page.waitForTimeout(200);
 // The extension point is the point: adding a visualisation must be adding one
 // object, with no change to the engine.
 const custom = await page.evaluate(async () => {
-  const m = await import('../src/visual/scenes.js');
+  const m = await import('../src/visual/scenes/index.js');
   m.registerScene('test-only', {
     label: 'Test',
     frame(ctx, api) {
