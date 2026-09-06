@@ -312,7 +312,7 @@ The full set:
 | **Skyline** | A scrolling record: one bar per event, height by size |
 
 **Adding one is adding an object** to
-[`src/visual/scenes.js`](src/visual/scenes.js), or registering it from
+one of the families in [`src/visual/scenes/`](src/visual/scenes), or registering it from
 outside:
 
 ```js
@@ -376,15 +376,39 @@ fails rather than passing quietly.
 
 ### Layout
 
+Everything public is re-exported from [`src/index.js`](src/index.js), so the
+files below can be split or renamed without breaking a caller.
+
 ```
-src/core/     event contract, adaptive mapper, voice allocator, Sonifier facade
-src/audio/    AudioContext and unlock, instruments, audio sink, recorder
-src/visual/   Canvas renderer and palettes
-src/sources/  Wikipedia, SSE, WebSocket, poll, manual, random
-server/       zero-dependency ingest and static server
-sounds/       sampled celesta, clavichord and string swells
-demo/         the sandbox page
-test/         core, server and browser checks
+src/core/               event contract, adaptive mapper, voice allocator, Sonifier facade
+src/audio/
+  engine.js             AudioContext, unlock, the iOS synchronous resume
+  instrument.js         the note-playing contract
+  sample-instrument.js  sampled banks, resampled by playback rate
+  synth-instrument.js   FM and subtractive engines, vibrato, pitch bend
+  presets.js            timbres as data
+  kits.js               named kits, and makeKit for your own
+  instruments.js        the barrel the rest of the library imports
+  audio-sink.js         routing events to voices
+  recorder-sink.js      offline rendering to WAV
+src/visual/
+  canvas-sink.js        the canvas loop
+  scenes/               marks, fields, structures, physical -- one file per family
+  palettes.js           colour schemes
+  shapes.js             mark geometry
+  kit-art.js            the drawn signature on each kit card
+src/sources/
+  transports.js         WebSocket, SSE, poll, manual, random, ingest
+  feeds.js              Bitcoin, Coinbase, earthquakes, Bluesky, GitHub, NOAA, HN
+  wikimedia.js          Wikipedia and its editions
+server/                 zero-dependency ingest and static server
+sounds/                 sampled celesta, clavichord and string swells
+demo/
+  demo.js               the sandbox page
+  dom.js                picker, canvas sizing and caption helpers
+  store.js              guarded local storage
+  feed-catalog.js       what the sandbox can listen to, as data
+test/                   core, server and browser checks
 ```
 
 ---
