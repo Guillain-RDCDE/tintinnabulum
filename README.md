@@ -30,6 +30,10 @@ Nothing to install; it runs in a browser, and on a phone.
 - **[Reference](docs/REFERENCE.md)** — the event contract, the library API, the
   eight built-in feeds, the twelve kits, the seventeen scenes and palettes.
 
+## Thanks
+
+Stéphanie Cante.
+
 ---
 
 <sub>The idea — a bell for growth, a plucked string for shrinkage, pitch inversely proportional to the size of the change — comes from <a href="https://github.com/hatnote/listen-to-wikipedia">Listen to Wikipedia</a> by Stephen LaPorte and Mahmoud Hashemi, and through it from <a href="https://www.bitlisten.com/">BitListen</a> by Maximillian Laumeister. The sample banks in <code>sounds/</code> are redistributed from that project under its BSD 3-Clause licence. Tintinnabulum is an independent implementation, not a fork, and is not endorsed by any of the above — see <a href="NOTICE">NOTICE</a>, and use <code>kit: 'synth'</code> to ship no third-party audio at all. BSD 3-Clause, see <a href="LICENSE">LICENSE</a>.</sub>
