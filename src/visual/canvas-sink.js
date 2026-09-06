@@ -175,6 +175,11 @@ export class CanvasSink {
       depth: this.depth,
       richness: this.richness,
       darkGround: this._darkGround,
+      // The ceiling scenes size their own collections against. Several keep
+      // arrays of their own -- drops, trails, seeds, bars -- and those used to
+      // carry hard-coded caps of their own, so raising the limit governed the
+      // marks and nothing else.
+      budget: this.maxParticles,
       // Scenes ask for a fill rather than reading p.color, so the gradient and
       // its caching stay here instead of being copied into every scene.
       fill: (ctx, p) => this.fillFor(ctx, p),
@@ -254,6 +259,24 @@ export class CanvasSink {
   setRichness(value) {
     this.richness = Math.max(0, Math.min(1, Number(value) || 0));
     this._recolor();
+    return this;
+  }
+
+  /**
+   * The ceiling on how much is kept on screen at once.
+   *
+   * A burst of data must cost frames, never the tab. Every collection the
+   * renderer or a scene keeps is bounded by this one number, so a machine that
+   * struggles can be given a smaller budget and a fast one a larger. Scenes
+   * hold their own arrays, and lowering the ceiling cannot retroactively shrink
+   * what they have already built, so their state is restarted.
+   */
+  setMaxParticles(n) {
+    const next = Math.max(50, Math.min(20000, Math.round(Number(n) || 0)));
+    if (next === this.maxParticles) return this;
+    this.maxParticles = next;
+    if (this.particles.length > next) this.particles.splice(0, this.particles.length - next);
+    this._initScene();
     return this;
   }
 
@@ -444,13 +467,17 @@ export class CanvasSink {
       }
     }
 
+    // Expiry first, drawing second. These used to be the same loop, walking
+    // newest-first and breaking as soon as it had drawn one -- so on any feed
+    // with a steady trickle of accent events the newest banner was always
+    // fresh, the loop broke immediately, and every older banner behind it was
+    // never looked at again. The array grew for as long as the page ran.
+    while (this.banners.length && now - this.banners[0].born >= 7000) this.banners.shift();
+    if (this.banners.length > 32) this.banners.splice(0, this.banners.length - 32);
+
     for (let i = this.banners.length - 1; i >= 0; i--) {
       const b = this.banners[i];
       const age = now - b.born;
-      if (age >= 7000) {
-        this.banners.splice(i, 1);
-        continue;
-      }
       const a = age < 500 ? age / 500 : age > 5000 ? Math.max(0, 1 - (age - 5000) / 2000) : 1;
       ctx.globalAlpha = a;
       ctx.fillStyle = this.palette.banner;
@@ -462,6 +489,10 @@ export class CanvasSink {
       break; // one banner at a time
     }
 
+    // Unconditionally: this list was trimmed inside _hud(), so turning the rate
+    // counter off left it growing by one entry per event for the life of the
+    // page. On a firehose that is a hundred thousand an hour.
+    this._trimRecent();
     if (this.showHud) this._hud(ctx);
 
     ctx.globalAlpha = 1;
@@ -482,9 +513,17 @@ export class CanvasSink {
     ctx.fillText(text, x, y);
   }
 
-  _hud(ctx) {
+  /** Drop event timestamps older than the minute the rate counter reports on. */
+  _trimRecent() {
     const cutoff = Date.now() - 60000;
     while (this._recent.length && this._recent[0] < cutoff) this._recent.shift();
+    // A source may hand over timestamps that are not in order, or not real
+    // clock times at all, in which case the cutoff above never fires. The rate
+    // readout covers a minute, so more than this many entries cannot inform it.
+    if (this._recent.length > 60000) this._recent.splice(0, this._recent.length - 60000);
+  }
+
+  _hud(ctx) {
     const label = this._recent.length + ' events per minute';
     ctx.globalAlpha = 1;
     ctx.font = '12px system-ui, sans-serif';

@@ -511,6 +511,138 @@ const depthUi = await page.evaluate(() => {
 ok('shaded marks are on by default and can be turned off',
    depthUi.started === true && depthUi.off === false && depthUi.back === true);
 
+// --- every scene preview must actually draw ------------------------------
+// The picker repaints each card inside a try/catch so one bad scene cannot
+// cost the others their picture. That is right, and it also means a scene that
+// throws leaves a blank card and a console warning nobody reads: bloom did
+// exactly that the moment it started calling api.fill(), which previewScene
+// did not yet provide. Errors are surfaced here rather than swallowed.
+const scenePreviews = await page.evaluate(async () => {
+  const { SCENES, previewScene, PALETTES } = await import('/src/index.js');
+  const palette = PALETTES.marine.colors;
+  const results = [];
+  for (const name of Object.keys(SCENES)) {
+    const cv = document.createElement('canvas');
+    cv.width = 220;
+    cv.height = 120;
+    const ctx = cv.getContext('2d');
+    let error = null;
+    try {
+      previewScene(ctx, name, { w: 220, h: 120, palette, richness: 0.45, depth: true });
+    } catch (e) {
+      error = String(e && e.message ? e.message : e);
+    }
+    // Ink means pixels differing from the ground the preview filled first.
+    const { data } = ctx.getImageData(0, 0, 220, 120);
+    const ground = [data[0], data[1], data[2]];
+    let inked = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      if (Math.abs(data[i] - ground[0]) + Math.abs(data[i + 1] - ground[1]) + Math.abs(data[i + 2] - ground[2]) > 24) inked++;
+    }
+    results.push({ name, error, coverage: inked / (220 * 120) });
+  }
+  return results;
+});
+const threw = scenePreviews.filter((p) => p.error);
+ok('no scene preview throws', threw.length === 0,
+   threw.map((p) => `${p.name}: ${p.error}`).join(' | ') || `${scenePreviews.length} scenes`);
+const blankPreviews = scenePreviews.filter((p) => p.coverage < 0.02);
+ok('every scene preview paints something', blankPreviews.length === 0,
+   blankPreviews.map((p) => `${p.name} ${(p.coverage * 100).toFixed(1)}%`).join(', ') || `${scenePreviews.length} scenes`);
+
+// The cards must follow the colour settings, or they advertise a look the
+// canvas will not deliver.
+const previewFollows = await page.evaluate(async () => {
+  const { previewScene, PALETTES } = await import('/src/index.js');
+  const palette = PALETTES.marine.colors;
+  const count = (richness, depth) => {
+    const cv = document.createElement('canvas');
+    cv.width = 220;
+    cv.height = 120;
+    const ctx = cv.getContext('2d');
+    previewScene(ctx, 'bloom', { w: 220, h: 120, palette, richness, depth });
+    const { data } = ctx.getImageData(0, 0, 220, 120);
+    const seen = new Set();
+    for (let i = 0; i < data.length; i += 4) seen.add((data[i] << 16) | (data[i + 1] << 8) | data[i + 2]);
+    return seen.size;
+  };
+  return { flat: count(0, false), rich: count(0.6, true) };
+});
+ok('scene cards reflect the colour settings',
+   previewFollows.rich > previewFollows.flat * 1.5,
+   `flat=${previewFollows.flat} rich=${previewFollows.rich}`);
+
+// --- nothing may grow without a ceiling ---------------------------------
+// A burst of data must cost frames, never the tab. Everything that accumulates
+// is checked against the budget by flooding it well past that budget.
+const bounded = await page.evaluate(async () => {
+  const son = window.son;
+  const sink = son.sinks.find((s) => s.particles);
+  const sizes = (label) => ({
+    label,
+    particles: sink.particles.length,
+    banners: sink.banners.length,
+    recent: sink._recent.length,
+    scene: Object.values(sink._scene)
+      .filter((v) => Array.isArray(v))
+      .reduce((m, v) => Math.max(m, v.length), 0),
+  });
+
+  const flood = async (n) => {
+    for (let i = 0; i < n; i++) {
+      son.emit({
+        magnitude: 1 + Math.floor(Math.random() * 5000),
+        id: 'flood-' + Math.random(),
+        // Every event an accent, which is what used to make the banner list
+        // grow without limit: the newest was always fresh, so the draw loop
+        // broke before it ever reached the stale ones behind it.
+        accent: true,
+        label: 'flood',
+      });
+    }
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  };
+
+  const results = [];
+  sink.setMaxParticles(300);
+  await flood(4000);
+  results.push(sizes('budget 300'));
+
+  // Turning the rate counter off must not stop the timestamp list being
+  // trimmed. It used to be trimmed inside the counter's own draw call.
+  const hudWas = sink.showHud;
+  sink.showHud = false;
+  await flood(4000);
+  results.push(sizes('hud off'));
+  sink.showHud = hudWas;
+
+  // Every scene, since each keeps collections of its own.
+  const { SCENES } = await import('/src/index.js');
+  const perScene = [];
+  for (const name of Object.keys(SCENES)) {
+    sink.setScene(name);
+    await flood(2500);
+    const s = sizes(name);
+    perScene.push({ name, worst: Math.max(s.particles, s.scene) });
+  }
+  sink.setScene('bloom');
+  sink.setMaxParticles(800);
+  return { results, perScene };
+});
+
+const overBudget = bounded.results.filter((r) => r.particles > 300);
+ok('the mark ceiling holds under a flood', overBudget.length === 0,
+   bounded.results.map((r) => `${r.label}: ${r.particles}`).join(', '));
+ok('the banner list is bounded', bounded.results.every((r) => r.banners <= 32),
+   bounded.results.map((r) => r.banners).join(', '));
+// 4000 events at once, twice: unbounded would be 8000 and climbing.
+ok('the rate list is trimmed even with the counter hidden',
+   bounded.results.every((r) => r.recent <= 60000),
+   bounded.results.map((r) => `${r.label}: ${r.recent}`).join(', '));
+const unbounded = bounded.perScene.filter((s) => s.worst > 400);
+ok('no scene keeps a collection past the budget', unbounded.length === 0,
+   unbounded.map((s) => `${s.name}=${s.worst}`).join(', ') || `${bounded.perScene.length} scenes under 300+slack`);
+
 // A mark carries the shade it was born with, so changing palette must re-derive
 // it rather than reshuffling the screen or dropping back to flat colour.
 const recolour = await page.evaluate(async () => {

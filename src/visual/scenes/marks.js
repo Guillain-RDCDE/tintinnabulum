@@ -80,8 +80,17 @@ export const MARK_SCENES = {
       for (const p of ps) {
         const fade = 1 - (api.now - p.born) / p.life;
         const r = Math.max(1.5, p.r * 0.22);
+        // A star is a point of light, so depth here is a glow rather than an
+        // outline: at this size an outline would be the whole star.
+        if (api.depth) {
+          ctx.globalAlpha = Math.min(1, fade) * 0.18;
+          ctx.fillStyle = p.color;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, r * 3.4, 0, TAU);
+          ctx.fill();
+        }
         ctx.globalAlpha = Math.min(1, fade * 1.2);
-        ctx.fillStyle = p.color;
+        ctx.fillStyle = api.depth ? p.rim : p.color;
         ctx.beginPath();
         ctx.arc(p.x, p.y, r, 0, TAU);
         ctx.fill();
@@ -103,7 +112,11 @@ export const MARK_SCENES = {
           const r = lead - k * 26;
           if (r <= 1) continue;
           ctx.globalAlpha = Math.max(0, fade * 0.5 * (1 - k / 4) * Math.min(1, 60 / r));
-          ctx.strokeStyle = p.color;
+          // The leading wavefront is brighter than the ones trailing it, which
+          // is both how a real ripple looks and what tells you which way the
+          // wave is travelling.
+          ctx.strokeStyle = api.depth && k === 0 ? p.rim : p.color;
+          ctx.lineWidth = api.depth && k === 0 ? 2 : 1.4;
           ctx.beginPath();
           ctx.arc(p.x, p.y, r, 0, TAU);
           ctx.stroke();
@@ -162,10 +175,20 @@ export const MARK_SCENES = {
         let behind = s.angle - Math.atan2(p.y - cy, p.x - cx);
         behind = ((behind % TAU) + TAU) % TAU;
         const lit = Math.max(0, 1 - behind / (TAU * 0.75));
+        const dot = Math.max(2.5, p.r * 0.22);
+        // A contact still glowing from the sweep that just passed it. The glow
+        // follows `lit`, so it decays around the dial with the beam.
+        if (api.depth && lit > 0.35) {
+          ctx.globalAlpha = fade * (lit - 0.35) * 0.4;
+          ctx.fillStyle = p.color;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, dot * 3, 0, TAU);
+          ctx.fill();
+        }
         ctx.globalAlpha = fade * (0.28 + lit * 0.72);
-        ctx.fillStyle = p.color;
+        ctx.fillStyle = api.depth && lit > 0.5 ? p.rim : p.color;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, Math.max(2.5, p.r * 0.22), 0, TAU);
+        ctx.arc(p.x, p.y, dot, 0, TAU);
         ctx.fill();
       }
     },

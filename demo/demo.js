@@ -369,6 +369,8 @@ function paintScenePreview(cv, name) {
     h,
     palette: PALETTES[canvas.paletteName].colors,
     shape: canvas.shape,
+    richness: canvas.richness,
+    depth: canvas.depth,
   });
 }
 
@@ -499,6 +501,19 @@ $('#depth').addEventListener('change', (e) => {
   store.setFlag('depth', e.target.checked);
 });
 
+function selectBudget(n, persist = true) {
+  canvas.setMaxParticles(n);
+  $('#budget').value = String(canvas.maxParticles);
+  $('#budget-val').textContent = String(canvas.maxParticles);
+  if (persist) store.set('budget', String(canvas.maxParticles));
+}
+
+// On `change`, not `input`: applying it restarts the active scene's own state,
+// and doing that on every pixel of a drag would wipe the picture continuously
+// while you were still deciding where to put the slider.
+$('#budget').addEventListener('input', (e) => ($('#budget-val').textContent = e.target.value));
+$('#budget').addEventListener('change', (e) => selectBudget(Number(e.target.value)));
+
 $('#starfield').addEventListener('change', (e) => {
   canvas.setStarfield(e.target.checked);
   store.setFlag('starfield', e.target.checked);
@@ -585,6 +600,7 @@ selectScene(store.pick('scene', SCENES, DEFAULT_SCENE), false);
 selectRichness(store.number('richness', canvas.richness * 100, 0, 100) / 100, false);
 $('#depth').checked = store.flag('depth', true);
 canvas.setDepth($('#depth').checked);
+selectBudget(store.number('budget', canvas.maxParticles, 100, 6000), false);
 $('#cats').addEventListener('change', updateSummaries);
 $('#minmag').addEventListener('input', updateSummaries);
 updateSummaries();

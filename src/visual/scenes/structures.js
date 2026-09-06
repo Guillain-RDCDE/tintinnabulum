@@ -1,6 +1,23 @@
 // Scenes that arrange events into a figure: a spiral, a dial, an orbit.
+//
+// The marks here are two or three pixels across. An outline on a three-pixel
+// dot is the dot, so depth in this family is a halo instead: a wider, very
+// faint disc under the mark, which is what stops a few hundred points reading
+// as evenly scattered dust.
+
+import { cap } from './budget.js';
 
 const TAU = Math.PI * 2;
+
+/** A soft disc under a small mark. One extra arc, drawn only when it shows. */
+function halo(ctx, x, y, r, color, alpha) {
+  if (alpha <= 0.02) return;
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, TAU);
+  ctx.fill();
+}
 
 export const STRUCTURE_SCENES = {
   spiral: {
@@ -13,8 +30,8 @@ export const STRUCTURE_SCENES = {
     },
     event(p, api) {
       const s = api.scene;
-      s.seeds.push({ i: s.n++, born: p.born, color: p.color, r: p.r });
-      if (s.seeds.length > 700) s.seeds.shift();
+      s.seeds.push({ i: s.n++, born: p.born, color: p.color, rim: p.rim, r: p.r });
+      if (s.seeds.length > cap(api, 0.9)) s.seeds.shift();
     },
     frame(ctx, api) {
       const s = api.scene;
@@ -30,10 +47,14 @@ export const STRUCTURE_SCENES = {
         const rad = scale * Math.sqrt(k);
         const age = api.now - seed.born;
         const fade = Math.max(0, 1 - age / 30000);
+        const x = cx + Math.cos(a) * rad;
+        const y = cy + Math.sin(a) * rad;
+        const dot = Math.max(1.5, seed.r * 0.13);
+        if (api.depth) halo(ctx, x, y, dot * 3.2, seed.color, (0.2 + fade * 0.7) * 0.16);
         ctx.globalAlpha = 0.2 + fade * 0.7;
-        ctx.fillStyle = seed.color;
+        ctx.fillStyle = api.depth ? seed.rim || seed.color : seed.color;
         ctx.beginPath();
-        ctx.arc(cx + Math.cos(a) * rad, cy + Math.sin(a) * rad, Math.max(1.5, seed.r * 0.13), 0, TAU);
+        ctx.arc(x, y, dot, 0, TAU);
         ctx.fill();
       }
     },
@@ -51,8 +72,8 @@ export const STRUCTURE_SCENES = {
     event(p, api) {
       const s = api.scene;
       if (!s.t0) s.t0 = api.now;
-      s.marks.push({ born: api.now, r: p.r, color: p.color });
-      if (s.marks.length > 900) s.marks.shift();
+      s.marks.push({ born: api.now, r: p.r, color: p.color, rim: p.rim });
+      if (s.marks.length > cap(api, 1.1)) s.marks.shift();
     },
     frame(ctx, api) {
       const s = api.scene;
@@ -73,10 +94,14 @@ export const STRUCTURE_SCENES = {
         const a = ((m.born - s.t0) / PERIOD) * TAU - Math.PI / 2;
         const rad = 18 + (m.r / 90) * (maxR - 18);
         const fade = Math.max(0.15, 1 - (api.now - m.born) / 90000);
+        const x = cx + Math.cos(a) * rad;
+        const y = cy + Math.sin(a) * rad;
+        const dot = Math.max(1.5, m.r * 0.09);
+        if (api.depth) halo(ctx, x, y, dot * 3.4, m.color, fade * 0.14);
         ctx.globalAlpha = fade * 0.85;
-        ctx.fillStyle = m.color;
+        ctx.fillStyle = api.depth ? m.rim || m.color : m.color;
         ctx.beginPath();
-        ctx.arc(cx + Math.cos(a) * rad, cy + Math.sin(a) * rad, Math.max(1.5, m.r * 0.09), 0, TAU);
+        ctx.arc(x, y, dot, 0, TAU);
         ctx.fill();
       }
     },
@@ -112,11 +137,21 @@ export const STRUCTURE_SCENES = {
         ctx.ellipse(cx, cy, rad, rad * 0.62, 0, 0, TAU);
         ctx.stroke();
 
+        const dot = Math.max(2, p.r * 0.12);
+        if (api.depth) halo(ctx, x, y, dot * 3, p.color, fade * 0.18);
         ctx.globalAlpha = Math.min(1, fade * 1.3);
         ctx.fillStyle = p.color;
         ctx.beginPath();
-        ctx.arc(x, y, Math.max(2, p.r * 0.12), 0, TAU);
+        ctx.arc(x, y, dot, 0, TAU);
         ctx.fill();
+        // A body large enough to carry one gets a lit edge, so the shells
+        // nearest the viewer read as solid rather than as more dust.
+        if (api.depth && dot > 3.5) {
+          ctx.globalAlpha = Math.min(1, fade);
+          ctx.strokeStyle = p.rim;
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
       }
     },
   },
@@ -149,6 +184,17 @@ export const STRUCTURE_SCENES = {
           else ctx.lineTo(x, y);
         }
         ctx.stroke();
+        // A brighter core inside the stroke, which is what gives a line body.
+        // Only for the freshest curves: the path is a hundred segments, and
+        // walking every one of them twice for figures that have nearly faded
+        // buys nothing anyone can see.
+        if (api.depth && fade > 0.55) {
+          ctx.globalAlpha = (fade - 0.55) * 1.4;
+          ctx.strokeStyle = p.rim;
+          ctx.lineWidth = 0.6;
+          ctx.stroke();
+          ctx.lineWidth = 1.4;
+        }
       }
     },
   },

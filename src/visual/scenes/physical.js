@@ -1,4 +1,12 @@
 // Scenes with something like physics: things that fall, pile up or scroll.
+//
+// Each scene keeps a copy of the colour an event was born with, so it also
+// keeps `rim`, the lifted edge tone the renderer derived alongside it. Depth
+// means different things here: a disc wants an outline, a falling drop wants a
+// bright head, a filled profile wants a gradient. What it never means is the
+// same three lines pasted into every scene.
+
+import { cap } from './budget.js';
 
 const TAU = Math.PI * 2;
 
@@ -13,8 +21,11 @@ export const PHYSICAL_SCENES = {
       api.scene.splashes = [];
     },
     event(p, api) {
-      api.scene.drops.push({ x: p.x, y: -10, v: 60 + p.r * 2.2, r: Math.max(1.2, p.r * 0.08), color: p.color });
-      if (api.scene.drops.length > 400) api.scene.drops.shift();
+      api.scene.drops.push({
+        x: p.x, y: -10, v: 60 + p.r * 2.2,
+        r: Math.max(1.2, p.r * 0.08), color: p.color, rim: p.rim,
+      });
+      if (api.scene.drops.length > cap(api, 0.5)) api.scene.drops.shift();
     },
     frame(ctx, api) {
       const s = api.scene;
@@ -34,8 +45,24 @@ export const PHYSICAL_SCENES = {
         ctx.moveTo(d.x, prev);
         ctx.lineTo(d.x, Math.min(d.y, surface));
         ctx.stroke();
+        // The leading end catches the light. A falling drop is read by its
+        // head, not by the whole streak, and this costs one short segment.
+        if (api.depth && d.y < surface) {
+          ctx.globalAlpha = 0.95;
+          ctx.strokeStyle = d.rim || d.color;
+          ctx.beginPath();
+          ctx.moveTo(d.x, Math.max(prev, d.y - d.r * 3));
+          ctx.lineTo(d.x, d.y);
+          ctx.stroke();
+        }
         if (d.y >= surface) {
-          s.splashes.push({ x: d.x, born: api.now, color: d.color, r: d.r });
+          // Splashes expire by age rather than by count, which is fine at any
+          // ordinary rate and not fine at all during a burst: a thousand drops
+          // landing inside one second are a thousand ellipses a frame until
+          // they time out.
+          if (s.splashes.length < cap(api, 0.35)) {
+            s.splashes.push({ x: d.x, born: api.now, color: d.color, r: d.r });
+          }
           s.drops.splice(i, 1);
         }
       }
@@ -78,9 +105,10 @@ export const PHYSICAL_SCENES = {
         vy: 0,
         r: Math.max(2.5, p.r * 0.16),
         color: p.color,
+        rim: p.rim,
         rest: false,
       });
-      if (api.scene.bits.length > 600) api.scene.bits.shift();
+      if (api.scene.bits.length > cap(api, 0.75)) api.scene.bits.shift();
     },
     frame(ctx, api) {
       const s = api.scene;
@@ -107,6 +135,15 @@ export const PHYSICAL_SCENES = {
         ctx.beginPath();
         ctx.arc(b.x, b.y, b.r, 0, TAU);
         ctx.fill();
+        // A heap of same-coloured discs with no edges is one shape. The
+        // outline is what makes it a heap of things. No gradient: these move,
+        // so one could not be cached, and six hundred a frame is not free.
+        if (api.depth && b.r > 3) {
+          ctx.globalAlpha = 0.55;
+          ctx.strokeStyle = b.rim || b.color;
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
       }
     },
   },
@@ -136,6 +173,7 @@ export const PHYSICAL_SCENES = {
         s.ridge[i] = Math.max(s.ridge[i], lift * (1 - Math.abs(d) / 5));
       }
       s.lastColor = p.color;
+      s.lastRim = p.rim;
     },
     frame(ctx, api) {
       const s = api.scene;
@@ -160,7 +198,19 @@ export const PHYSICAL_SCENES = {
       ctx.lineTo(api.w, base);
       ctx.closePath();
       ctx.globalAlpha = 0.35;
-      ctx.fillStyle = s.lastColor || api.palette.default;
+      // One gradient a frame, not one per mark, so the profile can have depth
+      // for the price of a single object: lit along the ridge, dark in the mass
+      // below it.
+      if (api.depth) {
+        let peak = 0;
+        for (let i = 0; i < s.cols; i++) if (s.ridge[i] > peak) peak = s.ridge[i];
+        const g = ctx.createLinearGradient(0, base - Math.max(12, peak), 0, base);
+        g.addColorStop(0, s.lastRim || s.lastColor || api.palette.default);
+        g.addColorStop(1, s.lastColor || api.palette.default);
+        ctx.fillStyle = g;
+      } else {
+        ctx.fillStyle = s.lastColor || api.palette.default;
+      }
       ctx.fill();
       // The outline uses the palette's brightest role, so the profile stays
       // legible even when the fill sits close to the ground colour.
@@ -179,8 +229,11 @@ export const PHYSICAL_SCENES = {
       api.scene.bars = [];
     },
     event(p, api) {
-      api.scene.bars.push({ h: p.r, color: p.color, born: p.born });
-      const max = Math.ceil(api.w / 6) + 8;
+      api.scene.bars.push({ h: p.r, color: p.color, rim: p.rim, born: p.born });
+      // The screen already limits this one -- a bar is six pixels wide -- but
+      // the budget must still be able to lower it on a machine that is
+      // struggling, so it is the smaller of the two.
+      const max = Math.min(Math.ceil(api.w / 6) + 8, cap(api, 1));
       if (api.scene.bars.length > max) api.scene.bars.splice(0, api.scene.bars.length - max);
     },
     frame(ctx, api) {
@@ -195,6 +248,14 @@ export const PHYSICAL_SCENES = {
         ctx.globalAlpha = 0.85;
         ctx.fillStyle = b.color;
         ctx.fillRect(x, baseline - h, bw, h);
+        // A lit cap, which is all a five-pixel bar has room for: it separates
+        // neighbouring bars of similar height without a gradient nobody could
+        // see across five pixels anyway.
+        if (api.depth) {
+          ctx.globalAlpha = 0.9;
+          ctx.fillStyle = b.rim || b.color;
+          ctx.fillRect(x, baseline - h, bw, Math.min(2, h));
+        }
         x += bw + gap;
       }
       ctx.globalAlpha = 0.25;

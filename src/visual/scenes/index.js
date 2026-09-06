@@ -22,6 +22,7 @@
 // invention. The grid is an explicit nod to Vera Molnar, whose work turned an
 // ordered grid into a study of controlled disorder.
 
+import { shadeOf, lighten, lightnessOf } from '../color.js';
 import { MARK_SCENES } from './marks.js';
 import { FIELD_SCENES } from './fields.js';
 import { STRUCTURE_SCENES } from './structures.js';
@@ -55,7 +56,14 @@ export function previewScene(
   // polar sweep advancing -- show an almost empty card and undersell
   // themselves. dt stays modest so the physics-based scenes integrate the
   // same way they do live.
-  { w, h, palette, shape = 'circle', frames = 110, dt = 62, seed = 7 } = {}
+  {
+    w, h, palette, shape = 'circle', frames = 110, dt = 62, seed = 7,
+    // A card that showed flat marks while the canvas drew shaded ones would be
+    // advertising the wrong product, so the preview takes the same two colour
+    // settings and builds the same per-event shades and gradients.
+    richness = 0.45,
+    depth = true,
+  } = {}
 ) {
   const scene = SCENES[name] || SCENES[DEFAULT_SCENE];
   // A scene may declare its own timescale: a polar sweep takes a minute to go
@@ -73,6 +81,7 @@ export function previewScene(
 
   const roles = ['user', 'anon', 'bot', 'user', 'anon'];
   const particles = [];
+  const darkGround = lightnessOf(palette.background) < 0.5;
   const api = {
     w, h, palette, particles,
     now: 0,
@@ -80,7 +89,30 @@ export function previewScene(
     shape,
     ringLife: 2200,
     scene: {},
+    depth,
+    richness,
+    darkGround,
+    // A card holds thirty-four events on a thumbnail, so the ceiling the live
+    // canvas runs under is irrelevant here; cap() has a floor that keeps every
+    // scene from starving at this size.
+    budget: 200,
     colorFor: (c) => palette[c] || palette.default,
+    // The same contract CanvasSink offers, including the per-particle cache:
+    // a preview runs a hundred frames, and rebuilding a gradient for every
+    // mark on every one of them is a hundred times the work for one picture.
+    fill: (c, p) => {
+      if (!depth) return p.color;
+      if (p._grad) return p._grad;
+      const g = c.createRadialGradient(
+        p.x - p.r * 0.3, p.y - p.r * 0.34, p.r * 0.08,
+        p.x, p.y, p.r * 1.1
+      );
+      g.addColorStop(0, lighten(p.color, 0.07));
+      g.addColorStop(0.6, p.color);
+      g.addColorStop(1, lighten(p.color, -0.05));
+      p._grad = g;
+      return g;
+    },
   };
 
   ctx.fillStyle = palette.background;
@@ -90,6 +122,10 @@ export function previewScene(
   const born = [];
   for (let i = 0; i < 34; i++) {
     const p = rnd() ** 1.7;
+    const base = palette[roles[i % roles.length]] || palette.default;
+    const tint = [rnd(), rnd(), rnd()];
+    const color = shadeOf(base, tint, richness);
+    const room = darkGround ? 1 - lightnessOf(color) : lightnessOf(color);
     born.push({
       // Births run right to the end: scenes whose marks are short-lived, like
       // falling drops, otherwise catch a quiet final frame and look empty.
@@ -100,7 +136,11 @@ export function previewScene(
         r: Math.max(2, Math.sqrt(p) * Math.min(w, h) * 0.34),
         rot: rnd() * Math.PI * 2,
         pick: rnd(),
-        color: palette[roles[i % roles.length]] || palette.default,
+        tint,
+        base,
+        color,
+        rim: lighten(color, (darkGround ? 0.26 : -0.26) * Math.min(1, room * 1.6)),
+        _grad: null,
         alpha0: 0.5,
         ring: true,
         label: '',

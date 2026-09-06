@@ -310,6 +310,41 @@ a shallow gradient and an outline on each mark; the outline is what keeps a
 pile of translucent marks reading as separate marks instead of averaging into
 one pale wash.
 
+### Keeping a burst from taking the machine
+
+Feeds are not polite. Bluesky alone runs to a couple of thousand posts a
+minute, and a backlogged poll can deliver a day at once. A surge has to cost
+frames, never the tab.
+
+```js
+new CanvasSink('#canvas', { maxParticles: 800 });
+sink.setMaxParticles(3000);   // longer history, more work per frame
+sink.setMaxParticles(300);    // for a machine that is struggling
+```
+
+One number bounds everything that accumulates. That was not previously true:
+the marks were capped, but each scene also kept collections of its own —
+falling drops, flow-field trails, spiral seeds, skyline bars — behind private
+hard-coded limits, so raising or lowering the ceiling governed the marks and
+nothing else. They now size themselves against the shared budget
+([`src/visual/scenes/budget.js`](src/visual/scenes/budget.js)), by a factor per
+scene, because a trail costing sixty line segments and a spiral seed costing
+one small disc do not deserve the same allowance.
+
+Two collections had no ceiling at all, and neither had anything to do with how
+many marks were on screen:
+
+- The banner queue was drawn newest-first and stopped at the first one still
+  alive. On any feed with a steady trickle of accent events that one was always
+  fresh, so the loop broke immediately and every stale banner behind it was
+  never examined again. Expiry and drawing are now separate passes.
+- The list of event timestamps behind the rate counter was trimmed inside the
+  counter's own draw call, so switching the counter off left it growing by one
+  entry per event for as long as the page stayed open.
+
+The test suite floods the renderer with thousands of events per scene and
+asserts that nothing exceeds its budget.
+
 ### Visualisations
 
 A scene decides what a moment of data looks like. Seventeen ship — the four
@@ -423,7 +458,7 @@ src/audio/
   recorder-sink.js      offline rendering to WAV
 src/visual/
   canvas-sink.js        the canvas loop
-  scenes/               marks, fields, structures, physical -- one file per family
+  scenes/               marks, fields, structures, physical, budget -- one file per family
   palettes.js           colour schemes
   color.js              OKLab shading, gamut fitting, per-event variation
   shapes.js             mark geometry

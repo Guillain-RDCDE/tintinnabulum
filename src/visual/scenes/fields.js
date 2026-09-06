@@ -1,6 +1,7 @@
 // Scenes that treat the canvas as a field the events disturb.
 
 import { noise2 } from './noise.js';
+import { cap } from './budget.js';
 
 const TAU = Math.PI * 2;
 
@@ -17,6 +18,7 @@ export const FIELD_SCENES = {
       api.scene.trails.push({
         x: p.x,
         y: p.y,
+        rim: p.rim,
         // The path so far. The canvas is cleared every frame, so a trail that
         // only drew the segment since the last frame left a dash rather than
         // the track it had travelled.
@@ -26,7 +28,8 @@ export const FIELD_SCENES = {
         life: 1,
         speed: 18 + p.r * 0.5,
       });
-      if (api.scene.trails.length > 500) api.scene.trails.splice(0, api.scene.trails.length - 500);
+      const capT = cap(api, 0.6);
+      if (api.scene.trails.length > capT) api.scene.trails.splice(0, api.scene.trails.length - capT);
     },
     frame(ctx, api) {
       const s = api.scene;
@@ -57,6 +60,20 @@ export const FIELD_SCENES = {
         ctx.moveTo(tr.pts[0], tr.pts[1]);
         for (let k = 2; k < tr.pts.length; k += 2) ctx.lineTo(tr.pts[k], tr.pts[k + 1]);
         ctx.stroke();
+        // The head only, never the whole trail. Five hundred trails of sixty
+        // points each is thirty thousand segments a frame already; drawing a
+        // highlight over all of them would double that for a gleam nobody sees
+        // on the tail. The mote is where the eye is anyway.
+        if (api.depth && tr.pts.length >= 8) {
+          const n = tr.pts.length;
+          ctx.globalAlpha = Math.min(0.95, tr.life * 1.2);
+          ctx.strokeStyle = tr.rim || tr.color;
+          ctx.lineWidth = tr.width * 0.7;
+          ctx.beginPath();
+          ctx.moveTo(tr.pts[n - 8], tr.pts[n - 7]);
+          for (let k = n - 6; k < n; k += 2) ctx.lineTo(tr.pts[k], tr.pts[k + 1]);
+          ctx.stroke();
+        }
       }
     },
   },
@@ -84,6 +101,7 @@ export const FIELD_SCENES = {
       s.heat[i] = Math.min(1.6, s.heat[i] + 0.5 + p.r / 120);
       s.turn[i] += (Math.random() - 0.5) * 1.4;
       s.lastColor = p.color;
+      s.lastRim = p.rim;
     },
     frame(ctx, api) {
       const s = api.scene;
@@ -111,6 +129,14 @@ export const FIELD_SCENES = {
             ctx.globalAlpha = Math.min(0.55, (heat - 0.55) * 0.9);
             ctx.fillStyle = ctx.strokeStyle;
             ctx.fillRect(-side / 2, -side / 2, side, side);
+            // A lit top and left edge on the hottest cells, so a struck square
+            // looks raised out of the grid rather than merely tinted.
+            if (api.depth) {
+              ctx.globalAlpha = Math.min(0.8, (heat - 0.55) * 1.4);
+              ctx.fillStyle = s.lastRim || ctx.strokeStyle;
+              ctx.fillRect(-side / 2, -side / 2, side, 1.5);
+              ctx.fillRect(-side / 2, -side / 2, 1.5, side);
+            }
           }
           ctx.restore();
         }
@@ -143,6 +169,7 @@ export const FIELD_SCENES = {
       s.flip[i] ^= 1;
       s.heat[i] = 1;
       s.lastColor = p.color;
+      s.lastRim = p.rim;
     },
     frame(ctx, api) {
       const s = api.scene;
@@ -171,6 +198,18 @@ export const FIELD_SCENES = {
             ctx.arc(x0, y0 + h, w / 2, Math.PI * 1.5, TAU);
           }
           ctx.stroke();
+          // The ribbons are several pixels wide, so they can carry a core.
+          // The path is still current after stroking, so this is a second
+          // stroke and not a second path -- and only on cells an event has
+          // just touched, which is a handful of the field at any moment.
+          if (api.depth && s.heat[i] > 0.05) {
+            const wide = ctx.lineWidth;
+            ctx.globalAlpha = s.heat[i] * 0.8;
+            ctx.strokeStyle = s.lastRim || ctx.strokeStyle;
+            ctx.lineWidth = wide * 0.34;
+            ctx.stroke();
+            ctx.lineWidth = wide;
+          }
         }
       }
     },
@@ -187,6 +226,7 @@ export const FIELD_SCENES = {
       api.scene.cols = cols;
       api.scene.off = Array.from({ length: rows }, () => new Float32Array(cols));
       api.scene.tint = new Array(rows).fill(null);
+      api.scene.rims = new Array(rows).fill(null);
     },
     event(p, api) {
       const s = api.scene;
@@ -202,6 +242,7 @@ export const FIELD_SCENES = {
         s.off[row][i] += push * 0.5 * (1 + Math.cos((Math.PI * d) / width));
       }
       s.tint[row] = p.color;
+      if (s.rims) s.rims[row] = p.rim;
     },
     frame(ctx, api) {
       const s = api.scene;
@@ -213,7 +254,12 @@ export const FIELD_SCENES = {
       for (let r = 0; r < s.rows; r++) {
         const y0 = gap * (r + 1);
         const line = s.off[r];
-        ctx.globalAlpha = 0.75;
+        // A thread no event has touched is drawn dim. It used to share the
+        // full opacity of the disturbed ones in the fallback colour, which is
+        // a near-white in almost every palette, so the rows nothing had
+        // happened in were the loudest things on screen.
+        const touched = Boolean(s.tint[r]);
+        ctx.globalAlpha = touched ? 0.75 : 0.22;
         ctx.strokeStyle = s.tint[r] || api.palette.default;
         ctx.beginPath();
         for (let i = 0; i < s.cols; i++) {
@@ -224,6 +270,26 @@ export const FIELD_SCENES = {
           else ctx.lineTo(x, y);
         }
         ctx.stroke();
+        // Twenty threads, not five hundred, so a second pass is affordable
+        // here where it was not for the flow field. It has to be a second
+        // path, not the same one under a transform: Canvas 2D fixes each
+        // segment in the transform current when it was added, so translating
+        // afterwards moves nothing. The one-pixel lift is what makes the weave
+        // read as thread rather than as wire.
+        if (api.depth && touched) {
+          ctx.globalAlpha = 0.4;
+          ctx.strokeStyle = (s.rims && s.rims[r]) || s.tint[r] || api.palette.default;
+          ctx.lineWidth = 0.9;
+          ctx.beginPath();
+          for (let i = 0; i < s.cols; i++) {
+            const x = i * step;
+            const y = y0 + line[i] - 1;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+          ctx.lineWidth = 1.6;
+        }
       }
     },
   },

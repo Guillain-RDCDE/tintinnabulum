@@ -301,6 +301,9 @@
         <summary>Advanced</summary>
         <div class="more-body">
           <div>
+            <label class="field"><span>Most on screen at once <span id="budget-val">800</span></span>
+              <input type="range" id="budget" min="100" max="6000" step="100" value="800"></label>
+            <p class="note" id="budget-note">Caps everything the visualisation keeps, so a burst of data costs frames rather than the whole tab. Lower it if the page struggles; raise it for a longer trail of history.</p>
             <label class="check"><input type="checkbox" id="depth" checked> Shaded marks with an outline</label>
             <label class="check"><input type="checkbox" id="starfield"> Starry sky</label>
             <label class="check"><input type="checkbox" id="labels" checked> Show titles on new events</label>
