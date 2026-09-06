@@ -827,15 +827,3 @@ export const WIKIPEDIA_LANGUAGES = [
   { code: 'sa', name: 'Sanskrit', native: 'संस्कृतम्', flag: '🇮🇳' },
   { code: 'eo', name: 'Esperanto', native: 'Esperanto', flag: '🌍' },
 ];
-
-export const WIKIPEDIA_LANGS = {
-  en: 'English', de: 'German', ru: 'Russian', uk: 'Ukrainian', ja: 'Japanese',
-  es: 'Spanish', fr: 'French', nl: 'Dutch', it: 'Italian', sv: 'Swedish',
-  ar: 'Arabic', fa: 'Farsi', he: 'Hebrew', id: 'Indonesian', zh: 'Chinese',
-  as: 'Assamese', hi: 'Hindi', bn: 'Bengali', pa: 'Punjabi', te: 'Telugu',
-  ta: 'Tamil', ml: 'Malayalam', mr: 'Marathi', kn: 'Kannada', or: 'Odia',
-  sa: 'Sanskrit', gu: 'Gujarati', pl: 'Polish', mk: 'Macedonian',
-  be: 'Belarusian', sr: 'Serbian', bg: 'Bulgarian', hu: 'Hungarian',
-  fi: 'Finnish', no: 'Norwegian', el: 'Greek', eo: 'Esperanto',
-  pt: 'Portuguese', et: 'Estonian', ur: 'Urdu', ro: 'Romanian', hy: 'Armenian',
-};

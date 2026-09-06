@@ -17,7 +17,6 @@ export {
   KITS,
   KIT_NAMES,
   makeKit,
-  renderKitWaveform,
 } from './audio/instruments.js';
 export { drawKitArt, KIT_ART_NAMES } from './visual/kit-art.js';
 
@@ -61,7 +60,6 @@ export {
   github,
   noaaAlerts,
   hackerNews,
-  WIKIPEDIA_LANGS,
   WIKIPEDIA_LANGUAGES,
   WIKIPEDIA_FLAG_CC,
   WIKIMON_PORTS,
