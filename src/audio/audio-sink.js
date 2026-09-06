@@ -13,7 +13,13 @@ export class AudioSink {
     this.enabled = opts.enabled !== false;
     // bpm 0 means free time: notes sound the instant their event arrives.
     this.tempo = { bpm: 0, division: 8, ...(opts.tempo || {}) };
-    this.stats = { played: 0, dropped: 0 };
+    // The shortest gap allowed between two notes, in milliseconds. See
+    // setRestraint. 0 restores the old behaviour of sounding everything.
+    this.minGap = opts.minGap ?? 0;
+    this._pending = null;
+    this._timer = null;
+    this._lastAt = 0;
+    this.stats = { played: 0, dropped: 0, passedOver: 0 };
   }
 
   /**
@@ -36,6 +42,63 @@ export class AudioSink {
     const step = (60 / bpm) * (4 / division);
     // The small guard keeps us from ever scheduling a beat already gone by.
     return Math.ceil((ctx.currentTime + 0.004) / step) * step;
+  }
+
+  /**
+   * The shortest gap allowed between two notes, in milliseconds.
+   *
+   * This is the difference between hearing a data stream and hearing music
+   * made of one. Listen to Wikipedia is disarming largely because it is
+   * sparse: Wikipedia produces a couple of edits a second, each note is a
+   * celesta with a two-second decay, and the space between them is filled by
+   * resonance rather than by more notes. Point the same engine at a feed
+   * running at thirty a second and there is no space left -- every note is
+   * masked by the next, and the result is a texture, not a rhythm.
+   *
+   * A rate cap alone does not fix that. The voice pool has one, and because it
+   * spends a token on whichever event happens to arrive while a token is free,
+   * what comes out is an arbitrary sample of the stream at a constant rate --
+   * which is precisely what a wash of undifferentiated noise sounds like.
+   *
+   * So this does not thin the stream, it *chooses* from it. Events arriving
+   * inside a gap are held, and when the gap elapses the most significant one
+   * of them sounds; the rest are passed over. The peaks survive, the filler
+   * does not, and the rhythm becomes the shape of the data rather than the
+   * shape of the network.
+   *
+   * The cost is latency: a note can wait up to one gap. The visuals are not
+   * gated, so at a long gap the picture leads the sound. That is the trade,
+   * and it is the same one setTempo makes.
+   */
+  setRestraint(ms) {
+    this.minGap = Math.max(0, Math.min(10000, Number(ms) || 0));
+    if (!this.minGap) this._flushNow();
+    return this;
+  }
+
+  /** Release any held note and stop waiting. Safe to call at any time. */
+  _flushNow() {
+    if (this._timer) {
+      clearTimeout(this._timer);
+      this._timer = null;
+    }
+    const held = this._pending;
+    this._pending = null;
+    if (held) this._play(held);
+  }
+
+  /** Drop anything held without sounding it. For stopping cleanly. */
+  clearPending() {
+    if (this._timer) {
+      clearTimeout(this._timer);
+      this._timer = null;
+    }
+    this._pending = null;
+    return this;
+  }
+
+  stop() {
+    return this.clearPending();
   }
 
   setKit(kit) {
@@ -134,6 +197,54 @@ export class AudioSink {
 
   handle(ev) {
     if (!this.enabled || ev.dimmed || !ev.map) return false;
+    if (!this.minGap) return this._play(ev);
+
+    const t = typeof performance !== 'undefined' ? performance.now() : Date.now();
+
+    // The first note after a silence sounds at once. Making it wait would put
+    // a gap of latency on the very first thing anyone hears, for no gain:
+    // there is nothing yet to space it away from.
+    if (!this._timer && t - this._lastAt >= this.minGap) {
+      this._lastAt = t;
+      return this._play(ev);
+    }
+
+    // Otherwise hold it, keeping whichever of the window's events matters
+    // most. Salience is the mapper's percentile, so this keeps the peaks.
+    if (!this._pending || this._weight(ev) >= this._weight(this._pending)) {
+      if (this._pending) this.stats.passedOver++;
+      this._pending = ev;
+    } else {
+      this.stats.passedOver++;
+    }
+
+    if (!this._timer) {
+      const wait = Math.max(0, this.minGap - (t - this._lastAt));
+      this._timer = setTimeout(() => {
+        this._timer = null;
+        const held = this._pending;
+        this._pending = null;
+        if (held) {
+          this._lastAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+          this._play(held);
+        }
+      }, wait);
+    }
+    return false;
+  }
+
+  /**
+   * What an event is worth when only one of several may sound.
+   *
+   * Salience is the mapper's percentile. An accent outranks all of it: the
+   * whole point of marking an event notable is that a burst of ordinary ones
+   * must not bury it, and a selection window is exactly such a burst.
+   */
+  _weight(ev) {
+    return (ev.accent ? 2 : 0) + (ev.map ? ev.map.salience : 0);
+  }
+
+  _play(ev) {
     const ctx = this.engine.ctx;
     const dest = this.engine.destination;
 

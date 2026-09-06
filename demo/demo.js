@@ -466,6 +466,33 @@ const shapePicker = createPicker(
 const repaintShapeSwatches = () => shapePicker.repaint(paintSwatch);
 requestAnimationFrame(repaintShapeSwatches);
 
+// Space between notes. The wording gives the rate rather than the millisecond
+// figure, because what anyone is actually choosing is how busy this is.
+const RESTRAINT_STEPS = [
+  [1, 'everything', 'Every event sounds the moment it arrives. Faithful to the data, and on a fast feed each note is masked by the next.'],
+  [300, 'measured', 'At most three or four notes a second. Enough space for a bell to be heard as a bell.'],
+  [700, 'sparse', 'About two a second, and only the most significant of whatever arrived in between.'],
+  [1201, 'ascetic', 'Roughly one note a second. Nearly all of the stream is passed over, and what is left is the shape of its peaks.'],
+];
+
+// Off by default: this changes what everyone hears, so it is offered rather
+// than imposed.
+let restraintWord = 'everything';
+
+function selectRestraint(ms, persist = true) {
+  const v = Math.max(0, Math.min(1200, Math.round(ms)));
+  son.audio.setRestraint(v);
+  const [, word, note] = RESTRAINT_STEPS.find(([edge]) => v < edge) || RESTRAINT_STEPS[3];
+  restraintWord = word;
+  $('#restraint-val').textContent = word;
+  $('#restraint-note').textContent = note;
+  $('#restraint').value = String(v);
+  if (persist) store.set('restraint', String(v));
+  updateSummaries();
+}
+
+$('#restraint').addEventListener('input', (e) => selectRestraint(Number(e.target.value)));
+
 // How far each event's colour may stray from its category's. The wording says
 // what the setting costs, not just what it does: at zero a colour identifies a
 // category, and past that it stops being able to.
@@ -549,7 +576,9 @@ function updateSummaries() {
   $('#sum-listen').textContent =
     FEEDS[feed].label + (FEEDS[feed].langs ? ` · ${langNames}${langs.length > 3 ? '…' : ''}` : '');
   $('#sum-sound').textContent =
-    KITS[currentKit].label + (son.audio.tempo.bpm ? ` · ${son.audio.tempo.bpm} bpm` : '');
+    KITS[currentKit].label +
+    ` · ${restraintWord}` +
+    (son.audio.tempo.bpm ? ` · ${son.audio.tempo.bpm} bpm` : '');
   $('#sum-look').textContent =
     `${SCENES[canvas.sceneName].label} · ${PALETTES[canvas.paletteName].label}` +
     (richnessWord === 'balanced' ? '' : ` · ${richnessWord} colour`);
@@ -601,6 +630,7 @@ selectRichness(store.number('richness', canvas.richness * 100, 0, 100) / 100, fa
 $('#depth').checked = store.flag('depth', true);
 canvas.setDepth($('#depth').checked);
 selectBudget(store.number('budget', canvas.maxParticles, 100, 6000), false);
+selectRestraint(store.number('restraint', 0, 0, 1200), false);
 $('#cats').addEventListener('change', updateSummaries);
 $('#minmag').addEventListener('input', updateSummaries);
 updateSummaries();
