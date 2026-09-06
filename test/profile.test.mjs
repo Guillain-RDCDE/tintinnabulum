@@ -14,6 +14,8 @@ const samples = {
   'http-access-log': { method: 'POST', route: '/checkout', status: 503, duration_ms: 812, time: '2026-09-06T10:00:00Z' },
   'prometheus-alert': { status: 'firing', labels: { alertname: 'DiskFull', instance: 'db-1', severity: 'critical' }, annotations: { summary: 'Disk 97% on db-1' }, generatorURL: 'https://prom/graph', startsAt: '2026-09-06T10:00:00Z' },
   'git-commit': { stats: { total: 143 }, additions: 120, deletions: 23, author: { email: 'a@b.c', name: 'A' }, message: 'Fix the thing\n\nlonger body', url: 'https://git/c/1', timestamp: 1757152800 },
+  'usgs-quake': { id: 'ci41542184', properties: { mag: 5.8, place: '6 km NNW of Cabazon, CA', time: 1788719342690, url: 'https://earthquake.usgs.gov/earthquakes/eventpage/ci41542184' } },
+  'x-search': { id: '1', text: 'Pentagon pizza index spiking\nsecond line', lang: 'en', created_at: '2026-09-06T23:10:00Z', public_metrics: { retweet_count: 240, like_count: 900, reply_count: 30 } },
 };
 
 for (const file of fs.readdirSync(DIR)) {

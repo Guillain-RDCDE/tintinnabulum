@@ -1,11 +1,16 @@
 # The Tintinnabulum input standard
 
-Two documents, both machine-readable.
+Three documents, all machine-readable.
 
 - **[`event.schema.json`](event.schema.json)** — `tintinnabulum.event/1`. What an
   event is. Nine fields, one of them required.
 - **[`mapping.schema.json`](mapping.schema.json)** — `tintinnabulum.mapping/1`. How
   your data becomes one, without writing code.
+- **[`source.schema.json`](source.schema.json)** — `tintinnabulum.source/1`. Where
+  live data comes from and how often to fetch it.
+
+A profile and a descriptor together are a complete connector, and neither is
+code. Nothing in this repository has to be edited to add one.
 
 ---
 
@@ -99,6 +104,79 @@ each one evaluated to, what defaulted, and the reason for any rejection.
 
 ---
 
+## The source
+
+A profile says how a payload becomes an event. It does not say where the
+payload comes from. That was the half still written in JavaScript, inside this
+repository — so "plug anything in" quietly meant "open `src/sources/` and write
+a function".
+
+A descriptor closes it. Save it as `sources/<name>.json`:
+
+```json
+{
+  "source": "tintinnabulum.source/1",
+  "name": "earthquakes",
+  "fetch": {
+    "url": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson",
+    "interval": 300000
+  },
+  "items": "$.features",
+  "key": "$.id",
+  "profile": "usgs-quake"
+}
+```
+
+`items` selects the array in the response. `key` gives each item a stable
+identity, so a poll returning the same things again does not replay them.
+`profile` is a name from `profiles/`, or a whole mapping document inline.
+
+Get it working before you listen to it:
+
+```bash
+curl -X POST localhost:8080/sources/earthquakes/test
+```
+
+That fetches once, emits nothing, and answers with the upstream status, the
+shape of what came back, how many items `items` found, and what the first one
+became. A wrong path is then obvious rather than mysterious.
+
+Then `POST /sources/earthquakes/start`, or set `"enabled": true` to have it
+start with the server. It is off by default on purpose: a checked-out
+repository should not begin calling other people's APIs on its own.
+
+**Secrets never go in the document.** Write `${env.NAME}` and set it in the
+environment where the server runs:
+
+```json
+"headers": { "Authorization": "Bearer ${env.X_BEARER_TOKEN}" }
+```
+
+`GET /sources` lists what each descriptor needs and what is missing, and never
+returns a resolved URL — a token in a query string would otherwise leak
+through the listing.
+
+Polling is paced and defended: a batch is spread across most of the interval
+so forty items are forty notes over a minute rather than a glitch, repeats are
+dropped by key, and a failing endpoint backs off exponentially and obeys
+`Retry-After`. Hammering a failing API is how a key gets revoked.
+
+### Writing one
+
+1. Find the URL and look at what it returns. `curl` it.
+2. Write `profiles/<yours>.json`: `magnitude` first, then whatever else is
+   worth hearing. `POST /explain` with one sample until it reads right.
+3. Write `sources/<yours>.json`: the URL, the interval, the `items` path.
+4. `POST /sources/<yours>/test` until `found` is the number you expect.
+5. Start it.
+
+Two are shipped to copy from. `sources/earthquakes.json` needs no key and works
+immediately. `sources/pizza-index.json` is the shape of a connector that needs
+a token — posts about late-night pizza deliveries near the Pentagon, on the
+folk theory that a crisis is catered before it is announced.
+
+---
+
 ## The expression language
 
 Deliberately small, and deliberately not a general one. A profile may arrive
@@ -128,6 +206,7 @@ cond ? a : b                      conditional
 | `at(x, i)` | index into an array or a string; negative counts from the end |
 | `epoch(x)` | ISO text, seconds or milliseconds → milliseconds |
 | `now()` | current epoch milliseconds |
+| `lookup(table, key, fallback)` | a named table from the profile's `tables`, for vocabularies too long to write as conditionals |
 
 **Nothing throws.** A missing path is `null`, not a crash; `$.nope.deeper` is
 `null`. Arithmetic on something that is not a number is `null`. This is

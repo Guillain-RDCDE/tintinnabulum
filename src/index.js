@@ -13,6 +13,14 @@ export {
   EVENT_VERSION,
   TARGET_FIELDS,
 } from './core/profile.js';
+export {
+  compileSource,
+  validateSource,
+  resolveSecrets,
+  secretsUsed,
+  SourceError,
+  SOURCE_VERSION,
+} from './core/source.js';
 
 export { AudioEngine } from './audio/engine.js';
 export { AudioSink } from './audio/audio-sink.js';

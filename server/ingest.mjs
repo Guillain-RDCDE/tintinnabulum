@@ -31,6 +31,8 @@ import {
   MAPPING_VERSION,
   EVENT_VERSION,
 } from '../src/core/profile.js';
+import { compileSource, validateSource, secretsUsed, SOURCE_VERSION } from '../src/core/source.js';
+import { SourceRunner } from './runner.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const argv = process.argv.slice(2);
@@ -127,6 +129,83 @@ function profileByName(name) {
     return p;
   } catch (e) {
     return null;
+  }
+}
+
+// --- sources --------------------------------------------------------------
+
+const SOURCE_DIR = path.join(ROOT, 'sources');
+const runner = new SourceRunner({ emit: broadcast, log: (l) => console.log(l) });
+
+function readSourceDoc(name) {
+  if (!/^[A-Za-z0-9._-]{1,64}$/.test(name) || name.startsWith('.')) return null;
+  const file = path.join(SOURCE_DIR, name + '.json');
+  if (!file.startsWith(SOURCE_DIR + path.sep) || !fs.existsSync(file)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (e) {
+    return null;
+  }
+}
+
+/** Compile a descriptor, resolving its profile by name or taking it inline. */
+function buildSource(doc) {
+  return compileSource(
+    doc,
+    (p) => (typeof p === 'string' ? profileByName(p) : compileProfile(p)),
+    process.env
+  );
+}
+
+function listSources() {
+  let files = [];
+  try {
+    files = fs.readdirSync(SOURCE_DIR).filter((f) => f.endsWith('.json'));
+  } catch (e) {
+    return [];
+  }
+  return files.map((f) => {
+    const name = f.slice(0, -5);
+    const doc = readSourceDoc(name);
+    if (!doc) return { name, valid: false, problems: ['could not be read as JSON'] };
+    const v = validateSource(doc);
+    const needed = secretsUsed(doc);
+    const missing = needed.filter((s) => !process.env[s]);
+    return {
+      name: doc.name || name,
+      description: doc.description || '',
+      // The declared URL, with `${env.X}` left in place: the resolved one may
+      // carry a token in a query string and must not leave the machine.
+      url: doc.fetch && doc.fetch.url,
+      profile: typeof doc.profile === 'string' ? doc.profile : 'inline',
+      interval: (doc.fetch && doc.fetch.interval) || null,
+      enabled: Boolean(doc.enabled),
+      secrets: needed,
+      missingSecrets: missing,
+      valid: v.ok,
+      problems: v.problems,
+      ...runner.status(doc.name || name),
+    };
+  });
+}
+
+/** Start every descriptor that asks for it and can actually run. */
+function startEnabledSources() {
+  for (const info of listSources()) {
+    if (!info.enabled) continue;
+    if (!info.valid) {
+      console.log(`source ${info.name}: not started, ${info.problems.join('; ')}`);
+      continue;
+    }
+    if (info.missingSecrets.length) {
+      console.log(`source ${info.name}: not started, missing ${info.missingSecrets.join(', ')}`);
+      continue;
+    }
+    try {
+      runner.start(buildSource(readSourceDoc(info.name)));
+    } catch (e) {
+      console.log(`source ${info.name}: not started, ${e.message}`);
+    }
   }
 }
 
@@ -355,6 +434,41 @@ async function handleExplain(req, res, url) {
   });
 }
 
+/**
+ * test, start and stop one source.
+ *
+ * `test` is the one that matters: it fetches once and reports what it found
+ * without emitting anything, so a connector can be got working without
+ * listening to it or waiting for an interval.
+ */
+async function handleSourceAction(req, res, name, action) {
+  const doc = readSourceDoc(name);
+  if (!doc) return json(res, 404, { error: `no source named "${name}"` });
+
+  if (action === 'stop') {
+    return json(res, 200, { name, stopped: runner.stop(doc.name || name) });
+  }
+
+  let src;
+  try {
+    src = buildSource(doc);
+  } catch (e) {
+    return json(res, 400, { error: 'invalid source', problems: e.problems || [String(e.message)] });
+  }
+  if (src.missingSecrets.length) {
+    return json(res, 400, {
+      error: 'missing secrets',
+      problems: src.missingSecrets.map((s) => `set ${s} in the environment before using this source`),
+    });
+  }
+
+  if (action === 'start') {
+    runner.start(src);
+    return json(res, 202, { name: src.name, started: true, interval: src.interval });
+  }
+  return json(res, 200, await runner.test(src));
+}
+
 function handleEvents(req, res, url) {
   cors(res);
   res.writeHead(200, {
@@ -419,6 +533,14 @@ const server = http.createServer((req, res) => {
   if (url.pathname === '/profiles') {
     return json(res, 200, { mapping: MAPPING_VERSION, profiles: listProfiles() });
   }
+  if (url.pathname === '/sources') {
+    return json(res, 200, { source: SOURCE_VERSION, sources: listSources() });
+  }
+  if (url.pathname === '/schema/source') return serveSchema(res, 'source.schema.json');
+  {
+    const m = url.pathname.match(/^\/sources\/([A-Za-z0-9._-]{1,64})\/(test|start|stop)$/);
+    if (m) return handleSourceAction(req, res, m[1], m[2]);
+  }
   if (url.pathname === '/schema' || url.pathname === '/schema/event') {
     return serveSchema(res, 'event.schema.json');
   }
@@ -443,4 +565,12 @@ server.listen(PORT, () => {
   console.log(`  demo        : http://localhost:${PORT}/demo/`);
   console.log(`  stream      : http://localhost:${PORT}/events`);
   console.log(`  try         : curl "http://localhost:${PORT}/emit?magnitude=5000&id=hello"`);
+  startEnabledSources();
 });
+
+for (const sig of ['SIGINT', 'SIGTERM']) {
+  process.on(sig, () => {
+    runner.stopAll();
+    server.close(() => process.exit(0));
+  });
+}

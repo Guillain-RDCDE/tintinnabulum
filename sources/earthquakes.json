@@ -1,0 +1,14 @@
+{
+  "source": "tintinnabulum.source/1",
+  "name": "earthquakes",
+  "description": "Every earthquake USGS has recorded in the past day. Needs no key, so it is the one to copy from.",
+  "enabled": false,
+  "fetch": {
+    "url": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson",
+    "interval": 300000,
+    "dedupeSize": 2000
+  },
+  "items": "$.features",
+  "key": "$.id",
+  "profile": "usgs-quake"
+}

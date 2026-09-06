@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://guillain-rdcde.github.io/tintinnabulum/spec/source.schema.json",
+  "title": "Tintinnabulum source descriptor",
+  "version": "tintinnabulum.source/1",
+  "description": "Where live data comes from, how often to fetch it, and which mapping turns it into events. Together with a mapping profile this is a complete connector, as a document rather than as code.",
+  "type": "object",
+  "required": ["name", "fetch", "profile"],
+  "additionalProperties": false,
+  "properties": {
+    "source": { "const": "tintinnabulum.source/1" },
+    "name": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._-]{1,64}$",
+      "description": "Identifies the source. Also its filename: sources/<name>.json."
+    },
+    "description": { "type": "string" },
+    "enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "Start polling when the server starts. Off by default: a checked-out repository should not begin calling other people's APIs on its own."
+    },
+    "fetch": {
+      "type": "object",
+      "required": ["url"],
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "type": "string",
+          "maxLength": 4096,
+          "description": "Must be https, except against localhost. May contain ${env.NAME} references, which are resolved where the runner runs and never stored or returned."
+        },
+        "method": { "enum": ["GET", "POST"], "default": "GET" },
+        "headers": {
+          "type": "object",
+          "maxProperties": 24,
+          "additionalProperties": { "type": "string" },
+          "description": "Values may contain ${env.NAME}. This is where an API token belongs; never inline one."
+        },
+        "body": { "description": "Sent as JSON when method is POST." },
+        "interval": { "type": "number", "minimum": 1000, "maximum": 86400000, "default": 60000, "description": "Milliseconds between polls. Respect the API's rate limit: this is the number that gets a key revoked." },
+        "timeout": { "type": "number", "minimum": 500, "maximum": 120000, "default": 15000 },
+        "dedupeSize": { "type": "number", "minimum": 0, "maximum": 100000, "default": 1000, "description": "How many recent keys to remember, so a poll that returns the same items again does not replay them." }
+      }
+    },
+    "items": {
+      "type": "string",
+      "description": "An expression selecting the array of things in the response. Omit it when the response is already the array.",
+      "examples": ["$.data", "$.features", "$.hits.hits"]
+    },
+    "key": {
+      "type": "string",
+      "description": "An expression giving each item a stable identity, used to recognise what has already been heard. Defaults to the event's id.",
+      "examples": ["$.id", "$.properties.id"]
+    },
+    "spread": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "default": 0.9,
+      "description": "Fraction of the interval over which a batch is spread. A poll returning forty items is otherwise forty notes at once, heard as a glitch rather than as forty things. 0 emits them together."
+    },
+    "profile": {
+      "description": "A profile name from profiles/, or a whole mapping document inline.",
+      "oneOf": [{ "type": "string" }, { "type": "object" }]
+    }
+  }
+}

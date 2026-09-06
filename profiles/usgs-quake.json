@@ -1,0 +1,17 @@
+{
+  "profile": "tintinnabulum.mapping/1",
+  "name": "usgs-quake",
+  "description": "USGS GeoJSON earthquake features. Richter magnitude is already the field's own word.",
+  "where": "$.properties.mag != null",
+  "map": {
+    "magnitude": "$.properties.mag * 100",
+    "polarity": { "const": 1 },
+    "id": "$.id",
+    "category": "$.properties.mag >= 5 ? 'alert' : $.properties.mag >= 3 ? 'anon' : 'user'",
+    "accent": "$.properties.mag >= 5.5",
+    "label": "$.properties.place",
+    "url": "$.properties.url",
+    "ts": "epoch($.properties.time)",
+    "source": { "const": "usgs" }
+  }
+}

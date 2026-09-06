@@ -13,13 +13,16 @@
     "src",
     "server",
     "sounds",
+    "spec",
+    "profiles",
+    "sources",
     "LICENSE",
     "NOTICE",
     "README.md"
   ],
   "scripts": {
     "serve": "node server/ingest.mjs",
-    "test": "node test/core.test.mjs && node test/expr.test.mjs && node test/profile.test.mjs && node test/server.test.mjs && node test/ingest.test.mjs",
+    "test": "node test/core.test.mjs && node test/expr.test.mjs && node test/profile.test.mjs && node test/source.test.mjs && node test/server.test.mjs && node test/ingest.test.mjs",
     "test:browser": "node test/browser.test.mjs",
     "social": "node tools/make-social-preview.mjs"
   },

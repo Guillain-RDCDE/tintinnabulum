@@ -1,0 +1,15 @@
+{
+  "source": "tintinnabulum.source/1",
+  "name": "pizza-index",
+  "description": "The Pentagon pizza index: posts about late-night pizza deliveries around the Pentagon, on the folk theory that a crisis is catered before it is announced. Needs X_BEARER_TOKEN in the environment.",
+  "enabled": false,
+  "fetch": {
+    "url": "https://api.twitter.com/2/tweets/search/recent?max_results=25&tweet.fields=created_at,public_metrics,lang&query=%28pizza%20index%20OR%20pentagon%20pizza%20OR%20%22pizza%20meter%22%29%20-is%3Aretweet",
+    "headers": { "Authorization": "Bearer ${env.X_BEARER_TOKEN}" },
+    "interval": 300000,
+    "dedupeSize": 2000
+  },
+  "items": "$.data",
+  "key": "$.id",
+  "profile": "x-search"
+}

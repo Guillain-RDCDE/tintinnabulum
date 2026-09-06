@@ -54,6 +54,18 @@ export function validateProfile(doc) {
   }
   if (doc.name != null && typeof doc.name !== 'string') problems.push('"name" must be a string');
 
+  if (doc.tables != null) {
+    if (typeof doc.tables !== 'object' || Array.isArray(doc.tables)) {
+      problems.push('"tables" must be an object of name -> {key: value}');
+    } else {
+      for (const [t, table] of Object.entries(doc.tables)) {
+        if (!table || typeof table !== 'object' || Array.isArray(table)) {
+          problems.push(`"tables.${t}" must be an object of key -> value`);
+        }
+      }
+    }
+  }
+
   const map = doc.map;
   if (!map || typeof map !== 'object' || Array.isArray(map)) {
     problems.push('"map" must be an object of target field -> expression');
@@ -104,10 +116,18 @@ export function compileProfile(doc) {
   if (!ok) throw new ProfileError('invalid profile', problems);
 
   const name = doc.name || 'anonymous';
-  const where = doc.where ? compile(doc.where) : null;
+  // Tables are copied without a prototype, so a table called "__proto__" or a
+  // key of that name cannot reach one through lookup().
+  const tables = Object.assign(Object.create(null), doc.tables || {});
+  for (const [k, v] of Object.entries(tables)) {
+    tables[k] = Object.assign(Object.create(null), v);
+  }
+  const ctx = { tables };
+
+  const where = doc.where ? compile(doc.where, ctx) : null;
   const fields = Object.entries(doc.map).map(([field, spec]) =>
     typeof spec === 'string'
-      ? { field, source: spec, run: compile(spec) }
+      ? { field, source: spec, run: compile(spec, ctx) }
       : { field, source: JSON.stringify(spec.const), run: () => spec.const }
   );
 

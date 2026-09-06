@@ -1,0 +1,20 @@
+{
+  "profile": "tintinnabulum.mapping/1",
+  "name": "x-search",
+  "description": "Tweets from the X API v2 recent-search endpoint. Engagement sets the pitch; a burst of replies reads as an argument, a burst of reposts as a signal.",
+  "tables": {
+    "lang": { "en": "user", "fr": "anon", "ru": "bot", "zh": "bot" }
+  },
+  "where": "$.text != null",
+  "map": {
+    "magnitude": "1 + coalesce($.public_metrics.retweet_count, 0) * 3 + coalesce($.public_metrics.like_count, 0) + coalesce($.public_metrics.reply_count, 0) * 2",
+    "polarity": "coalesce($.public_metrics.retweet_count, 0) >= coalesce($.public_metrics.reply_count, 0) ? 1 : -1",
+    "id": "$.id",
+    "category": "lookup('lang', $.lang, 'user')",
+    "accent": "coalesce($.public_metrics.retweet_count, 0) >= 100",
+    "label": "at(split($.text, '\n'), 0)",
+    "url": "'https://x.com/i/web/status/' + $.id",
+    "ts": "epoch($.created_at)",
+    "source": { "const": "x-search" }
+  }
+}

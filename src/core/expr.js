@@ -217,9 +217,7 @@ function parse(src) {
           }
         }
         expect(')');
-        if (!Object.prototype.hasOwnProperty.call(FUNCTIONS, t.v)) {
-          throw new ExprError('unknown function: ' + t.v);
-        }
+        if (!isFunction(t.v)) throw new ExprError('unknown function: ' + t.v);
         return node({ k: 'call', name: t.v, args });
       }
       // A bare name is not a variable: there are no variables. Saying so is
@@ -291,6 +289,39 @@ export const FUNCTIONS = {
   now: () => Date.now(),
 };
 
+/**
+ * Functions that need the compile-time context rather than only their
+ * arguments. They are called with it as a hidden first parameter, so a
+ * profile's tables stay out of the expression's reach as data it could walk.
+ */
+const CONTEXT_FUNCTIONS = {
+  /**
+   * lookup('severity', $.level, 5) -- a named table from the profile.
+   *
+   * Real feeds classify things with a vocabulary: NWS severities, syslog
+   * levels, HTTP statuses. Writing that as nested conditionals is unreadable
+   * and, past a handful of cases, hits the node ceiling. A table is the honest
+   * shape for it, and keeping tables in the profile rather than in the
+   * expression keeps them diffable.
+   */
+  lookup: (ctx, table, key, fallback = null) => {
+    const t = ctx && ctx.tables ? ctx.tables[String(table)] : null;
+    if (!t) return fallback ?? null;
+    const k = key == null ? '' : String(key);
+    if (FORBIDDEN.has(k)) return fallback ?? null;
+    return Object.prototype.hasOwnProperty.call(t, k) ? t[k] : (fallback ?? null);
+  },
+};
+
+const isFunction = (name) =>
+  Object.prototype.hasOwnProperty.call(FUNCTIONS, name) ||
+  Object.prototype.hasOwnProperty.call(CONTEXT_FUNCTIONS, name);
+
+export const FUNCTION_NAMES = [
+  ...Object.keys(FUNCTIONS),
+  ...Object.keys(CONTEXT_FUNCTIONS),
+].sort();
+
 // --- evaluator ------------------------------------------------------------
 
 function member(obj, key) {
@@ -309,7 +340,7 @@ function member(obj, key) {
 
 const truthy = (v) => v != null && v !== false && v !== 0 && v !== '' && !(Array.isArray(v) && !v.length);
 
-function evaluate(ast, root) {
+function evaluate(ast, root, ctx) {
   let steps = 0;
 
   const walk = (n) => {
@@ -323,7 +354,9 @@ function evaluate(ast, root) {
       case 'cond': return truthy(walk(n.test)) ? walk(n.then) : walk(n.other);
       case 'call': {
         const args = n.args.map(walk);
-        const out = FUNCTIONS[n.name](...args);
+        const out = Object.prototype.hasOwnProperty.call(CONTEXT_FUNCTIONS, n.name)
+          ? CONTEXT_FUNCTIONS[n.name](ctx, ...args)
+          : FUNCTIONS[n.name](...args);
         if (typeof out === 'string' && out.length > LIMITS.string) {
           throw new ExprError('string result too long');
         }
@@ -376,11 +409,12 @@ function evaluate(ast, root) {
  * compiled expression is what a profile actually stores.
  *
  * @param {string} src
+ * @param {{tables?: Record<string, Record<string, any>>}} [ctx] named tables for lookup()
  * @returns {(payload: any) => any} throws ExprError, and only ExprError
  */
-export function compile(src) {
+export function compile(src, ctx = {}) {
   const ast = parse(src);
-  return (payload) => evaluate(ast, payload === undefined ? null : payload);
+  return (payload) => evaluate(ast, payload === undefined ? null : payload, ctx);
 }
 
 /** Parse without evaluating, to validate a profile before accepting it. */
