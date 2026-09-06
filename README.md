@@ -32,7 +32,8 @@ Nothing to install; it runs in a browser, and on a phone.
 
 ## Thanks
 
-Stéphanie Cante.
+**Stéphanie Cante**, who put Listen to Wikipedia in front of me, explained what
+made it good, and said this had to exist.
 
 ---
 
