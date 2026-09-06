@@ -4,71 +4,69 @@
 
 # Tintinnabulum
 
-**Turn any stream of events into sound.** Numbers you would normally read in a
-dashboard become bells and plucked strings — large values low, small values high
-— so you can hear what your data is doing while you look at something else.
+**Hear your data.**
 
-**[Open the sandbox](https://guillain-rdcde.github.io/tintinnabulum/)** — nothing
-to install, runs in your browser. · **[How it works](docs/HOW-IT-WORKS.md)** —
-the whole pipeline, explained from first principles. ·
-**[Reference](#reference)**
+Something happens. You hear a note.
 
-> *tintinnabulum, -i, n.* — Latin for a small bell. The plural, *tintinnabuli*,
-> is the name Arvo Pärt gave to his bell-like compositional style.
+Big things sound low. Small things sound high. Things that grow ring. Things
+that shrink are plucked.
+
+That is the whole idea.
+
+**[Open the sandbox →](https://guillain-rdcde.github.io/tintinnabulum/)**
+Nothing to install. It runs in a browser, and on a phone.
+
+> *tintinnabulum* — Latin, a small bell.
 
 ---
 
-## Getting started
+## Try it
 
-**[Open the sandbox.](https://guillain-rdcde.github.io/tintinnabulum/)** Press
-**Start listening to Wikipedia**. That is the only step; the button also asks
-the browser for permission to make sound.
+Press **Start**. That is the only step.
 
-You are now listening to Wikipedia. Every circle is somebody editing an article,
-somewhere in the world, at that moment.
+You are listening to Wikipedia. Every circle is somebody editing an article,
+somewhere, at that moment.
 
-- **A bell** means text was added. **A plucked string** means text was removed.
-- **A low note** is a large edit; **a high note** is a small one.
-- **Green** marks an anonymous editor, **purple** a bot, **white** a logged-in
-  contributor. *(Those are the default colours; there are nine palettes.)*
-- Clicking a circle opens the article that produced the sound.
+- A bell means text was added. A plucked string means it was removed.
+- A low note is a large edit. A high note is a small one.
+- Click a circle to open the article.
 
-That is the whole idea. It is designed to be left running in a background tab,
-and it works on a phone.
+Leave it in a background tab and get on with something else.
 
-The sandbox is one page, not two. Four sections — **Listen to**, **Sound**,
-**Look**, **Filter** — each showing its essentials, with an **Advanced**
-disclosure that reveals the rest in place. Every setting exists exactly once.
-If you would rather not listen to Wikipedia, there are seven other feeds in the
-first section. To hear your own data, see
-[Sending your own data](#sending-your-own-data) — it is one `curl` command.
+Eleven other feeds sit in the same list: Bitcoin, Coinbase, earthquakes,
+Bluesky, GitHub, severe weather, Hacker News. To send your own, see
+[Sending your own data](#sending-your-own-data). It is one `curl` command.
 
-For an explanation of what actually happens between the live feed and the note
-in your speakers, see **[How it works](docs/HOW-IT-WORKS.md)**, which covers it
-in plain language first and in full detail afterwards.
+Everything lives on one page, in five sections you can fold away. Each says what
+it is set to. Each keeps the rest behind **Advanced**. No setting exists twice.
+
+For what happens between the feed and the speaker, read
+**[How it works](docs/HOW-IT-WORKS.md)**.
 
 ### Worth trying
 
-| Setting | Effect |
+| | |
 |---|---|
-| **Sound → Water** | The same events as drops in a cavity instead of bells. Six of the seven kits are pure synthesis, with no audio files at all. |
-| **Sound → Gongs** | Best paired with a sparse feed such as Earthquakes: long, slow, inharmonic. |
-| **Mapping → Scale → pentatonic** | Notes snap to a five-note scale, and the result sounds composed rather than arbitrary. |
-| **Bitcoin, Coinbase, Earthquakes, Bluesky, GitHub** | Five other live feeds, in the same one-tap list as Wikipedia. Coinbase is the interesting one: buys ring and sells pluck. |
-| **Wikipedia editions** | Pick several at once from the flag grid — four Wikipedias running together are busier, denser and more musical than one. |
-| **Palette** | Nine looks, from *Nocturne* to *Bronze* to *Daylight*. Circles already on screen recolour immediately, and the choice is remembered. |
-| **Instruments → Record** | Captures what you are hearing to an audio file. |
-| **Untick "Big event = low note"** | Inverts the mapping. Large edits become shrill — worse, but instructive. |
+| **Sound → Water** | The same events as drops in a cavity. Eleven of the twelve kits are pure synthesis: no audio files at all. |
+| **Sound → Gongs** | Pair it with Earthquakes. Long, slow, inharmonic. |
+| **Sound → Scale → pentatonic** | Notes snap to five. It stops sounding arbitrary and starts sounding composed. |
+| **Sound → Restraint** | Space between notes. On a fast feed, only the most significant event in each gap sounds, and the rest are passed over. |
+| **Coinbase** | Buys ring, sells pluck. The one feed where direction means something on its own. |
+| **Several Wikipedias at once** | Pick them from the flag grid. Four together are denser than one, and more musical. |
+| **Look** | Seventeen visualisations and seventeen palettes. Marks already on screen recolour at once. |
+| **Record** | Captures what you are hearing to an audio file. |
+| **Untick "Large events sound low"** | Inverts the mapping. Large edits turn shrill. Worse, and instructive. |
 
 ---
 
 ## Reference
 
-A dependency-free sonification engine. Anything reducible to
-**(magnitude, polarity, identity)** can be heard and seen: request latencies,
-commits, build results, queue depths, sensor readings, Wikipedia edits.
+A sonification engine with no dependencies.
 
-No build step, no bundler, no `npm install`. ES modules and `node:http`.
+Anything that reduces to **(magnitude, polarity, identity)** can be heard and
+seen. Latencies. Commits. Build results. Queue depths. Sensor readings.
+
+No build step. No bundler. No `npm install`. ES modules and `node:http`.
 
 ### The event contract
 
@@ -105,25 +103,51 @@ son.emit({ magnitude: 512, id: 'anything', category: 'alert' });
 
 ### Musical rules
 
-Four controls decide how a stream of numbers becomes music, all under
-**Sound → Advanced**:
+Five controls decide how a stream of numbers becomes music.
 
 | Control | Effect |
 |---|---|
-| **Scale** | 19 of them — modes, pentatonics, blues, whole-tone, octatonic, the Japanese *hirajoshi*, *in-sen* and *kumoi*, plus bare fourths, fifths and octaves. Pitches are snapped to the chosen set, so nothing can land outside it. |
+| **Scale** | Nineteen of them: modes, pentatonics, blues, whole-tone, octatonic, the Japanese *hirajoshi*, *in-sen* and *kumoi*, and bare fourths, fifths and octaves. Pitches snap to the set, so nothing lands outside it. |
 | **Key** | Transposes the whole thing. |
-| **Humanise** | Up to ±2 semitones of wobble, so repeated values stop sounding mechanical. |
-| **Tempo** | The largest change of the four. Events arrive whenever the world produces them, which is arrhythmic by definition; setting a tempo holds each note until the next quarter, eighth or sixteenth. The same data becomes metrical. |
+| **Humanise** | Up to ±2 semitones of wobble. Repeated values stop sounding mechanical. |
+| **Tempo** | Events arrive whenever the world produces them, which is arrhythmic by definition. A tempo holds each note until the next quarter, eighth or sixteenth. The same data turns metrical. |
+| **Restraint** | Space between notes. See below. |
 
 ```js
 son.mapper.setScale('hirajoshi');
 son.mapper.root = 5;          // transpose to F
 son.mapper.jitter = 0.8;      // semitones of humanising
 son.audio.setTempo(96, 8);    // eighth notes at 96bpm; 0 for free time
+son.audio.setRestraint(700);  // ms between notes; 0 sounds everything
 ```
 
-Quantising costs a little synchronisation: a note waits at most one
-subdivision, so at a slow tempo the picture leads the sound slightly.
+Quantising costs a little synchronisation. A note waits at most one
+subdivision, so at a slow tempo the picture leads the sound.
+
+### Restraint
+
+Wikipedia produces a couple of edits a second. Each note is a bell with a
+two-second decay, and the silence between them is filled by resonance. That is
+most of why it is pleasant to listen to.
+
+Point the same engine at a feed running thirty a second and there is no silence
+left. Every note is masked by the next. The result is a texture, not a rhythm.
+
+A rate cap does not fix this. The voice pool has one, and it spends its token
+on whichever event happens to arrive while a token is free — so what comes out
+is an arbitrary sample of the stream at a constant rate. Which is what
+undifferentiated noise sounds like.
+
+`setRestraint(ms)` chooses instead of thinning. Events arriving inside a gap are
+held. When the gap elapses, the most significant of them sounds and the rest are
+passed over. Accents outrank significance, because the point of marking an event
+notable is that a burst of ordinary ones must not bury it.
+
+The peaks survive. The filler does not. The rhythm becomes the shape of the
+data rather than the shape of the network.
+
+It costs latency: a note can wait one gap. The visuals are not held back, so at
+a long gap the picture leads the sound.
 
 ### Pitch that calibrates itself
 
@@ -146,8 +170,8 @@ event inside it. `maxPerSecond` adds a token-bucket ceiling on top.
 
 ### Sources
 
-Six live feeds are built in, all public, all keyless, all reachable over TLS
-from a static page:
+Eight live feeds are built in. All public, all keyless, all reachable over TLS
+from a static page.
 
 | Feed | What you hear | Rate |
 |---|---|---|
@@ -157,6 +181,8 @@ from a static page:
 | `earthquakes()` | USGS seismic events. The only feed where *magnitude* is already the field's own word | a handful an hour |
 | `bluesky()` | The public post firehose, pitched by post length | very busy |
 | `github()` | Pushes, pull requests, releases and stars across GitHub | polled once a minute |
+| `noaaAlerts()` | Active US severe-weather alerts, pitched by severity. Each carries the moment it was issued, so the replay keeps the shape of the day | a few hundred standing |
+| `hackerNews()` | Front-page stories, pitched by score and comments. A new story always scores one, so the front page is used instead: it spans three orders of magnitude | slow |
 
 Bluesky labels carry the size of a post rather than its text: an unfiltered
 firehose is not something to put on someone's screen unasked. The full record
@@ -218,7 +244,7 @@ nothing beyond `node:http`.
 Implement `load(ctx)` and `play(ctx, dest, {semitone, velocity})` and you have a
 new instrument.
 
-Ten kits ship, selectable at runtime:
+Twelve kits ship, selectable at runtime.
 
 | Kit | Sound |
 |---|---|
@@ -232,8 +258,10 @@ Ten kits ship, selectable at runtime:
 | **Wind chimes** | Tubes rather than bars, with a long tail |
 | **Steel pan** | Nearly harmonic partials, so it sings where a gong clangs |
 | **Plucked strings** | Harp above, deep pizzicato below. The warmest of the set |
+| **Dawn chorus** | Birdsong, built from swept whistles rather than recordings |
+| **Night** | Crickets and low wind. The quietest thing here |
 
-Only the first uses audio files. **The other nine are pure synthesis: nothing
+Only the first uses audio files. **The other eleven are pure synthesis: nothing
 to download, nothing to license, and they work offline.**
 
 - `SampleInstrument` plays recorded banks, resampled through `playbackRate`, so
@@ -282,13 +310,15 @@ vision.
 
 ### Colour variety
 
-A palette names one colour per category, which for a long time meant a screen
-carried four. That is not what made it look flat, though. The commonest
-category in a live feed is `user`, and in fifteen of the seventeen palettes
-`user` was a near-white — so most of a running screen was white, whichever
-palette you picked. Every palette now gives that category a real hue.
+A palette names one colour per category. For a long time that meant a screen
+carried four.
 
-On top of that, each event takes its own shade of its category's colour:
+That is not what made it look flat. The commonest category in a live feed is
+`user`, and in fifteen of the seventeen palettes `user` was a near-white. Most
+of a running screen was white, whichever palette you chose. Every palette now
+gives that category a real hue.
+
+On top of that, each event takes its own shade of its category's colour.
 
 ```js
 new CanvasSink('#canvas', { richness: 0.45, depth: true });
@@ -296,25 +326,26 @@ sink.setRichness(0);   // one exact colour per category
 sink.setRichness(1);   // shades spread far enough to drift in hue
 ```
 
-The variation is computed in OKLab, not HSL, so a lighter or darker shade keeps
-its hue instead of sliding towards green the way an HSL lightness change does
-([`src/visual/color.js`](src/visual/color.js)). Out-of-gamut results lose
-chroma rather than being clipped channel by channel, which is what otherwise
-turns a dark ink into pure red. Lightness varies first and hue last: depth in a
-dense field comes from value, and spreading hue early is how a visualisation
-turns into confetti.
+The variation is computed in OKLab, not HSL. Darken a teal in HSL and it slides
+towards green, so one category would read as several
+([`src/visual/color.js`](src/visual/color.js)). Colours that fall outside the
+gamut lose chroma rather than being clipped channel by channel, which is what
+turns a dark ink into pure red.
 
-`richness: 0` is an exact identity, and it is the honest setting whenever
-colour is meant to *identify* a category rather than decorate it. `depth` adds
-a shallow gradient and an outline on each mark; the outline is what keeps a
-pile of translucent marks reading as separate marks instead of averaging into
-one pale wash.
+Lightness varies first, hue last. Depth in a dense field comes from value.
+Spreading hue early is how a visualisation turns into confetti.
+
+`richness: 0` is an exact identity. It is the honest setting whenever colour is
+meant to *identify* a category rather than decorate it.
+
+`depth` adds a shallow gradient and an outline. The outline is the part that
+matters: a pile of translucent marks with no edges averages into one pale wash.
 
 ### Keeping a burst from taking the machine
 
-Feeds are not polite. Bluesky alone runs to a couple of thousand posts a
-minute, and a backlogged poll can deliver a day at once. A surge has to cost
-frames, never the tab.
+Feeds are not polite. Bluesky runs to a couple of thousand posts a minute, and
+a backlogged poll can deliver a day at once. A surge has to cost frames, never
+the tab.
 
 ```js
 new CanvasSink('#canvas', { maxParticles: 800 });
@@ -322,17 +353,17 @@ sink.setMaxParticles(3000);   // longer history, more work per frame
 sink.setMaxParticles(300);    // for a machine that is struggling
 ```
 
-One number bounds everything that accumulates. That was not previously true:
-the marks were capped, but each scene also kept collections of its own —
-falling drops, flow-field trails, spiral seeds, skyline bars — behind private
-hard-coded limits, so raising or lowering the ceiling governed the marks and
-nothing else. They now size themselves against the shared budget
-([`src/visual/scenes/budget.js`](src/visual/scenes/budget.js)), by a factor per
-scene, because a trail costing sixty line segments and a spiral seed costing
-one small disc do not deserve the same allowance.
+One number bounds everything that accumulates.
 
-Two collections had no ceiling at all, and neither had anything to do with how
-many marks were on screen:
+That was not always true. The marks were capped, but each scene also kept
+collections of its own — falling drops, flow-field trails, spiral seeds,
+skyline bars — behind private hard-coded limits. Raising the ceiling governed
+the marks and nothing else. They now size against a shared budget
+([`src/visual/scenes/budget.js`](src/visual/scenes/budget.js)), by a factor per
+scene: a trail costs sixty line segments, a spiral seed costs one disc.
+
+Two collections had no ceiling at all, and neither depended on how many marks
+were on screen.
 
 - The banner queue was drawn newest-first and stopped at the first one still
   alive. On any feed with a steady trickle of accent events that one was always

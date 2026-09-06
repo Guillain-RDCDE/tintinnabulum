@@ -336,7 +336,7 @@ The original project simply played one file per note and was therefore limited t
 including notes above and below anything that was recorded. `step: 0` marks an
 unpitched bank (the swells), which picks a variation at random instead.
 
-**`SynthInstrument`** needs no files at all, which is why six of the seven kits
+**`SynthInstrument`** needs no files at all, which is why eleven of the twelve kits
 are free of downloads and of licensing entirely. Two engines, plus a `sweep`
 parameter that bends the pitch during the attack: a falling water drop rings
 *upward* as the cavity closes, and that bend is the whole difference between a
@@ -387,7 +387,7 @@ inside a bigger site, with no configuration.
   visible colour instead of vanishing.
 - Clicking a circle hit-tests newest-first and opens its `url`.
 
-**Palettes.** Nine ship with the project and can be swapped at runtime with
+**Palettes.** Seventeen ship with the project and can be swapped at runtime with
 `setPalette()`; circles already on screen are recoloured from the category they
 were born with, so the change is immediate rather than waiting for the canvas to
 turn over.
