@@ -110,14 +110,24 @@ async function upgradeToSamples() {
 
 let audioReady = false;
 async function ensureAudio() {
-  // Gate on "the kit is loaded", not on "the context is running". Some
-  // browsers start with a running context, and short-circuiting on that alone
-  // skipped the kit load entirely -- leaving the page permanently silent.
-  if (audioReady) return son.audioStatus;
+  // First, synchronously, while the gesture is still ours: the right to start
+  // audio does not survive an await on iOS, so loading a kit before asking
+  // would spend the tap without using it.
+  son.engine.resumeSync();
+
+  // Gate on being genuinely audible, not merely on the kit having loaded. A
+  // kit loads happily while the context stays blocked, and latching on that
+  // turned every later tap into a no-op: the overlay kept asking, and nothing
+  // it did could ever help.
+  if (audioReady && !son.locked) {
+    refreshUnlock();
+    return son.audioStatus;
+  }
+
   setAudioStatus('Preparing sound…');
   if (sampleState === 'pending' && currentKit === 'hatnote') await son.setKit('synth');
   const status = await son.unlock();
-  audioReady = Boolean(status.usable);
+  audioReady = Boolean(status.audible);
   describe(status);
   refreshUnlock();
   if (status.audible) upgradeToSamples();
@@ -659,9 +669,17 @@ setInterval(() => {
     $('#sum-activity').textContent = `${son.eventsPerMinute} events per minute`;
   }
   updateSummaries();
+  // The overlay tracks the context in both directions. It used to be refreshed
+  // only while locked, so once sound started by some other route it stayed on
+  // screen telling you to tap for audio you could already hear.
+  // Only the overlay is updated here. Readiness is deliberately not inferred
+  // from a running context: a browser that starts unblocked would latch it
+  // before any kit had loaded, and unlock() -- which is what loads the kit --
+  // would then never run, leaving a page that looks fine and plays nothing.
+  refreshUnlock();
+
   if (son.engine.locked && son.stats.received > 0) {
     setAudioStatus('Sound is suspended by the browser. Tap anywhere to resume it.', 'bad');
-    refreshUnlock();
   } else if (son.stats.received > 12 && son.audio.stats.played === 0 && !son.locked) {
     setAudioStatus('Events are arriving but nothing is being played. Check the volume and the filters.', 'bad');
   }

@@ -519,6 +519,44 @@ const swap = await page.evaluate(async () => {
 ok('notes keep sounding while a new kit is loading', swap.during > 0, 'played=' + swap.during);
 ok('notes still sound once the new kit is in', swap.after > 0, 'played=' + swap.after);
 
+// --- the unlock overlay must tell the truth ------------------------------
+// Reported from a phone: the overlay said "tap to enable sound", tapping it
+// did nothing, and once sound started by another route the overlay was still
+// there asking. Both faults came from latching on "the kit loaded" rather than
+// "we can hear", and from only ever refreshing the overlay while locked.
+ok('the engine exposes a synchronous resume for use inside a gesture',
+   await page.evaluate(() => typeof window.son.engine.resumeSync === 'function'));
+
+const overlayTruth = await page.evaluate(async () => {
+  const el = document.querySelector('#unlock');
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  // Force the context back down, as a phone does when it refuses a gesture.
+  await window.son.engine.ctx.suspend();
+  await wait(1400);
+  const whileBlocked = el.classList.contains('show');
+  // Resume by some other means than the overlay, which is exactly what
+  // pressing Start ended up doing.
+  await window.son.engine.ctx.resume();
+  await wait(1400);
+  const afterResume = el.classList.contains('show');
+  return { whileBlocked, afterResume, state: window.son.engine.ctx.state };
+});
+ok('the overlay appears when the context is blocked', overlayTruth.whileBlocked);
+ok('the overlay goes away once sound is possible, however it was unblocked',
+   overlayTruth.afterResume === false, 'ctx=' + overlayTruth.state);
+
+// A refused unlock must not make every later attempt a no-op.
+const retries = await page.evaluate(async () => {
+  await window.son.engine.ctx.suspend();
+  const before = window.son.engine.ctx.state;
+  document.querySelector('#unlock').click();
+  await new Promise((r) => setTimeout(r, 600));
+  return { before, after: window.son.engine.ctx.state };
+});
+ok('tapping the overlay still tries after an earlier failure',
+   retries.before === 'suspended' && retries.after === 'running',
+   `${retries.before} -> ${retries.after}`);
+
 // --- the way out of the sandbox -----------------------------------------
 // Without this a shared link is a dead end: no way to reach the project.
 const homeHref = await page.getAttribute('#home', 'href');

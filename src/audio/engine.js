@@ -37,7 +37,16 @@ export class AudioEngine {
   }
 
   /** Must be called from inside a user gesture. Resolves true when audible. */
-  async unlock() {
+  /**
+   * The synchronous half of unlocking, and the half that must not be deferred.
+   *
+   * A browser grants the right to start audio only while a user gesture is
+   * being handled, and on iOS that right does not survive an `await`. Anything
+   * asynchronous before this call -- loading a kit, for instance -- spends the
+   * tap before it is used, and resume() is then refused. Call this first,
+   * synchronously, from the handler itself.
+   */
+  resumeSync() {
     const ctx = this.ctx;
 
     // iOS routes Web Audio through the "ambient" session by default, which the
@@ -51,6 +60,28 @@ export class AudioEngine {
     } catch (e) {
       /* not supported here; nothing is lost */
     }
+
+    try {
+      if (ctx.state === 'suspended') ctx.resume();
+    } catch (e) {
+      /* reported by the state, not by throwing */
+    }
+
+    // iOS additionally wants a buffer actually started during the gesture.
+    try {
+      const buf = ctx.createBuffer(1, 1, ctx.sampleRate);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(ctx.destination);
+      src.start(0);
+    } catch (e) {}
+
+    return ctx.state;
+  }
+
+  async unlock() {
+    const ctx = this.ctx;
+    this.resumeSync();
 
     if (ctx.state === 'suspended') {
       try {
@@ -70,14 +101,6 @@ export class AudioEngine {
         }
       });
     }
-    // iOS additionally wants a buffer actually started during the gesture.
-    try {
-      const buf = ctx.createBuffer(1, 1, ctx.sampleRate);
-      const src = ctx.createBufferSource();
-      src.buffer = buf;
-      src.connect(ctx.destination);
-      src.start(0);
-    } catch (e) {}
     return ctx.state === 'running';
   }
 
