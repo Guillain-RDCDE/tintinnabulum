@@ -479,6 +479,7 @@ tools/
 demo/
   demo.js               the sandbox page
   connect.js            the "Your data" panel: the standard, without a server
+  look.js               scenes, palettes, shapes, colour variety, the ceiling
   dom.js                picker, canvas sizing and caption helpers
   store.js              guarded local storage
   feed-catalog.js       what the sandbox can listen to, as data
